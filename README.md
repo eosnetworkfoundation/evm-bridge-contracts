@@ -9,11 +9,10 @@ Contracts to support the trustless bridge of the EOS EVM
 
 ## How to Build
 - cd to 'build' directory
-- run the command 'cmake ..'
+- run the command 'cmake -Deosio_DIR={leap dir} ..'
 - run the command 'make'
 
 ## How to Test
-- cd to 'test/build' directory
-- run the command 'cmake -Deosio_DIR={leap dir} ..'
-- run the command 'make'
-- run the test 'ctest'
+The build step above will build the test as well
+- goto build/{contract project name}/test, we only have "erc2o" project for now.
+- 'ctest'
