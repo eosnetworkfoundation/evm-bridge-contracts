@@ -12,7 +12,7 @@ configure_file(${CMAKE_SOURCE_DIR}/contracts.hpp.in ${CMAKE_BINARY_DIR}/contract
 
 include_directories(
     ${CMAKE_BINARY_DIR}
-    ${CMAKE_SOURCE_DIR}/../external/silkworm/third_party/intx/include
+    ${EXTERNAL_DIR}/silkworm/third_party/intx/include
 )
 
 add_eosio_test_executable( unit_test

@@ -4,7 +4,7 @@
 #include <eosio/eosio.hpp>
 #include <eosio/singleton.hpp>
 #include <intx/intx.hpp>
-#include <types.hpp>
+#include <erc2o/types.hpp>
 
 using namespace eosio;
 using namespace intx;

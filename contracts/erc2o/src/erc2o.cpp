@@ -1,7 +1,7 @@
-#include <bytecode.hpp>
-#include <eosio.token.hpp>
-#include <erc2o.hpp>
-#include <hex.hpp>
+#include <solidity/erc2o_bytecode.hpp>
+#include <erc2o/eosio.token.hpp>
+#include <erc2o/erc2o.hpp>
+#include <erc2o/hex.hpp>
 #include <silkworm/core/execution/address.hpp>
 #include <silkworm/core/common/util.hpp>
 
