@@ -2,6 +2,20 @@ project(erc2o_tests)
 cmake_minimum_required(VERSION 3.12)
 
 
+include(ExternalProject)
+
+ExternalProject_Add(
+   erc2o_stubs
+   SOURCE_DIR ${CMAKE_SOURCE_DIR}/stubs/
+   BINARY_DIR ${CMAKE_BINARY_DIR}/stubs
+   CMAKE_ARGS -DCMAKE_TOOLCHAIN_FILE=${CDT_ROOT}/lib/cmake/cdt/CDTWasmToolchain.cmake -DEXTERNAL_DIR=${CMAKE_SOURCE_DIR}/external
+   UPDATE_COMMAND ""
+   PATCH_COMMAND ""
+   TEST_COMMAND ""
+   INSTALL_COMMAND ""
+   BUILD_ALWAYS 1
+)
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20")
 
 find_package(eosio)

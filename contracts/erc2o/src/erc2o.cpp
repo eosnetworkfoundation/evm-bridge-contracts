@@ -33,14 +33,16 @@ void erc2o::init() {
 void erc2o::onbridgemsg(name receiver, const bytes& sender, const time_point& timestamp, const bytes& value, const bytes& data) {
     require_auth(evm_account);
 
-    check(value.size() == kAddressLength + 32 , "invalid data");
+    // TODO: this API will change
+
+    check(data.size() == kAddressLength + 32 , "invalid data size");
     // TODO: verify from, decode data
-    intx::uint256 amount = intx::be::unsafe::load<intx::uint256>((const uint8_t*)value.data() + kAddressLength);
+    intx::uint256 amount = intx::be::unsafe::load<intx::uint256>((const uint8_t*)data.data() + kAddressLength);
     evmc::address dest = {};
-    memcpy(dest.bytes, value.data(), kAddressLength);
+    memcpy(dest.bytes, data.data(), kAddressLength);
     auto to = silkworm::extract_reserved_address(dest);
 
-    check(!!to , "invalid data");
+    check(!!to , "failed to extract destination address");
 
     eosio::check(amount % minimum_natively_representable == 0_u256, "transfer must not generate dust");
 
