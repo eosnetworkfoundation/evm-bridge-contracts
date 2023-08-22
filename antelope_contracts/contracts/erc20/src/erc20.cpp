@@ -1,13 +1,13 @@
 #include <solidity_contracts/erc20/erc20_bytecode.hpp>
-#include <erc2o/eosio.token.hpp>
-#include <erc2o/erc2o.hpp>
-#include <erc2o/hex.hpp>
+#include <erc20/eosio.token.hpp>
+#include <erc20/erc20.hpp>
+#include <erc20/hex.hpp>
 #include <silkworm/core/execution/address.hpp>
 #include <silkworm/core/common/util.hpp>
 
-namespace erc2o {
+namespace erc20 {
 
-void erc2o::init() {
+void erc20::init() {
     require_auth(get_self());
     auto reserved_addr = silkworm::make_reserved_address(get_self().value);
     auto call_data = from_hex(bytecode);
@@ -30,7 +30,7 @@ void erc2o::init() {
     _config.set(new_config, get_self());
 }
 
-void erc2o::onbridgemsg(name receiver, const bytes& sender, const time_point& timestamp, const bytes& value, const bytes& data) {
+void erc20::onbridgemsg(name receiver, const bytes& sender, const time_point& timestamp, const bytes& value, const bytes& data) {
     require_auth(evm_account);
 
     // TODO: this API will change
@@ -50,7 +50,7 @@ void erc2o::onbridgemsg(name receiver, const bytes& sender, const time_point& ti
     transfer_act.send(get_self(), *to, eosio::asset((uint64_t)(amount / minimum_natively_representable), token_symbol), std::string("Transfer from EVM"));
 }
 
-void erc2o::transfer(eosio::name from, eosio::name to, eosio::asset quantity,
+void erc20::transfer(eosio::name from, eosio::name to, eosio::asset quantity,
                      std::string memo) {
     eosio::check(get_first_receiver() == token_account && quantity.symbol == token_symbol,
                  "received unexpected token");
@@ -64,7 +64,7 @@ void erc2o::transfer(eosio::name from, eosio::name to, eosio::asset quantity,
     
 }
 
-void erc2o::handle_evm_transfer(eosio::asset quantity, const std::string& memo) {
+void erc20::handle_evm_transfer(eosio::asset quantity, const std::string& memo) {
     const char method[4] = {'\xa9', '\x05', '\x9c', '\xbb'};  // sha3(transfer(address,uint256))[:4]
 
     auto address_bytes = from_hex(memo);
@@ -88,4 +88,4 @@ void erc2o::handle_evm_transfer(eosio::asset quantity, const std::string& memo) 
     call_act.send(get_self(), *address_bytes, 0, call_data, evm_gaslimit);
 }
 
-}  // namespace erc2o
+}  // namespace erc20

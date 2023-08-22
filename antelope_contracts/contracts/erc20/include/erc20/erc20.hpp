@@ -4,20 +4,20 @@
 #include <eosio/eosio.hpp>
 #include <eosio/singleton.hpp>
 #include <intx/intx.hpp>
-#include <erc2o/types.hpp>
+#include <erc20/types.hpp>
 
 using namespace eosio;
 using namespace intx;
 
-namespace erc2o {
+namespace erc20 {
 
-class [[eosio::contract]] erc2o : public contract {
+class [[eosio::contract]] erc20 : public contract {
    public:
     using contract::contract;
 
     [[eosio::on_notify("*::transfer")]] void transfer(eosio::name from, eosio::name to, eosio::asset quantity, std::string memo);
 
-    // evm runtime will call this to notify erc2o about the message from 'from' with 'data'.
+    // evm runtime will call this to notify erc20 about the message from 'from' with 'data'.
     [[eosio::action]] void onbridgemsg(name receiver, const bytes& sender, const time_point& timestamp, const bytes& value, const bytes& data);
     [[eosio::action]] void init();
 
@@ -33,7 +33,7 @@ class [[eosio::contract]] erc2o : public contract {
     void handle_evm_transfer(eosio::asset quantity, const std::string &memo);
 
     void call(eosio::name from, const bytes &to, uint128_t value, const bytes &data, uint64_t gas_limit);
-    using call_action = action_wrapper<"call"_n, &erc2o::call>;
+    using call_action = action_wrapper<"call"_n, &erc20::call>;
 };
 
-}  // namespace erc2o
+}  // namespace erc20

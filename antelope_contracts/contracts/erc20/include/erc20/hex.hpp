@@ -1,50 +1,13 @@
+
 #pragma once
-
-#include <cstdint>
-#include <cstring>
-#include <eosio/chain/abi_serializer.hpp>
-#include <eosio/chain/fixed_bytes.hpp>
-#include <eosio/testing/tester.hpp>
-#include <intx/intx.hpp>
-#include <optional>
-
-namespace erc2o_test {
-
-typedef std::vector<char> bytes;
-
-extern const eosio::chain::name eos_token_account;
-extern const eosio::chain::symbol eos_token_symbol;
-extern const eosio::chain::name token_account;
-extern const eosio::chain::symbol token_symbol;
-extern const eosio::chain::name evm_account;
-extern const eosio::chain::name faucet_account_name;
-extern const eosio::chain::name erc2o_account;
-using namespace eosio;
-using namespace eosio::chain;
-
-class erc2o_tester : public eosio::testing::validating_tester {
-   public:
-    const eosio::chain::symbol native_symbol;
-    explicit erc2o_tester(std::string native_symbol_str = "4,EOS");
-
-    eosio::chain::asset make_asset(int64_t amount) const { return eosio::chain::asset(amount, native_symbol); }
-    eosio::chain::asset make_asset(int64_t amount, const eosio::chain::symbol& target_symbol) const { return eosio::chain::asset(amount, target_symbol); }
-    eosio::chain::transaction_trace_ptr transfer_token(eosio::chain::name token_account_name, eosio::chain::name from, eosio::chain::name to, eosio::chain::asset quantity, std::string memo = "");
-
-    eosio::chain::abi_serializer abi_ser;
-    eosio::chain::abi_serializer token_abi_ser;
-
-    eosio::chain::asset get_balance(const account_name& act, const account_name& token_addr, const eosio::chain::symbol& target_symbol) {
-        std::vector<char> data = get_row_by_account(token_addr, act, "accounts"_n, name(target_symbol.to_symbol_code().value));
-        return data.empty() ? eosio::chain::asset(0, target_symbol) : token_abi_ser.binary_to_variant("account", data, eosio::chain::abi_serializer::create_yield_function(abi_serializer_max_time))["balance"].as<eosio::chain::asset>();
-    }
-};
 
 // Hex helper functions:
 // Copied from EVMC: Ethereum Client-VM Connector API.
 // No functionality modification expected.
 // Copyright 2021 The EVMC Authors.
 // Licensed under the Apache License, Version 2.0.
+
+namespace erc20 {
 
 /// Extracts the nibble value out of a hex digit.
 /// Returns -1 in case of invalid hex digit.
@@ -101,4 +64,4 @@ inline std::optional<bytes> from_hex(std::string_view hex) {
     return bs;
 }
 
-}  // namespace erc2o_test
+}  // namespace erc20

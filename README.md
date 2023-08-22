@@ -14,5 +14,5 @@ Contracts to support the trustless bridge of the EOS EVM
 
 ## How to Test
 The build step above will build the test as well
-- goto build/{contract project name}/test, we only have "erc2o" project for now.
+- goto build/{contract project name}/test, we only have "erc20" project for now.
 - 'ctest'

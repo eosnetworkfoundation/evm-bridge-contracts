@@ -6,7 +6,7 @@
 using namespace eosio;
 using namespace intx;
 
-namespace erc2o {
+namespace erc20 {
 
 typedef std::vector<char> bytes;
 
@@ -21,4 +21,4 @@ constexpr eosio::name evm_account(eosio::name("eosio.evm"));
 constexpr intx::uint256 minimum_natively_representable = intx::exp(10_u256, intx::uint256(evm_precision - token_symbol.precision()));
 static_assert(evm_precision - token_symbol.precision() <= 14, "dust math may overflow a uint64_t");
 
-}  // namespace erc2o
+}  // namespace erc20

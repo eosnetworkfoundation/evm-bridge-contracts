@@ -11,18 +11,18 @@
 #include <intx/intx.hpp>
 #include <optional>
 
-#include "erc2o_tester.hpp"
+#include "erc20_tester.hpp"
 
 using namespace eosio;
 using namespace eosio::chain;
-using namespace erc2o_test;
+using namespace erc20_test;
 using namespace eosio::testing;
 using mvo = fc::mutable_variant_object;
 
 using intx::operator""_u256;
 constexpr size_t kAddressLength{20};
 
-struct transfer_tester : erc2o_tester {
+struct transfer_tester : erc20_tester {
     transfer_tester() {
         create_accounts({"alice"_n});
         transfer_token(eos_token_account, faucet_account_name, "alice"_n, make_asset(10000'0000));
@@ -35,7 +35,7 @@ struct transfer_tester : erc2o_tester {
     void gen_bridgemessage(const char* dest, intx::uint256 value) {
         bytes calldata;
 
-        auto dest_buffer = erc2o_test::from_hex(dest);
+        auto dest_buffer = erc20_test::from_hex(dest);
         uint8_t value_buffer[32] = {};
         intx::be::store(value_buffer, value);
 
@@ -43,18 +43,18 @@ struct transfer_tester : erc2o_tester {
         calldata.insert(calldata.end(), dest_buffer->data(), dest_buffer->data() + kAddressLength);
         calldata.insert(calldata.end(), value_buffer, value_buffer + 32);
 
-        // Cannot directly send message to erc2o
+        // Cannot directly send message to erc20
         BOOST_REQUIRE_EXCEPTION(push_action(
-                                    erc2o_account, "onbridgemsg"_n, "alice"_n, mvo()("receiver", erc2o_account)("sender", bytes())("timestamp", eosio::chain::time_point())("value", bytes())("data", calldata)),
+                                    erc20_account, "onbridgemsg"_n, "alice"_n, mvo()("receiver", erc20_account)("sender", bytes())("timestamp", eosio::chain::time_point())("value", bytes())("data", calldata)),
                                 missing_auth_exception, eosio::testing::fc_exception_message_starts_with("missing authority"));
 
         // Go through stub
         push_action(
-            evm_account, "sendbridgemsg"_n, "alice"_n, mvo()("receiver", erc2o_account)("sender", bytes())("timestamp", eosio::chain::time_point())("value", bytes())("data", calldata));
+            evm_account, "sendbridgemsg"_n, "alice"_n, mvo()("receiver", erc20_account)("sender", bytes())("timestamp", eosio::chain::time_point())("value", bytes())("data", calldata));
     }
 };
 
-BOOST_AUTO_TEST_SUITE(erc2o_tests)
+BOOST_AUTO_TEST_SUITE(erc20_tests)
 BOOST_FIXTURE_TEST_CASE(eos_side_transfer, transfer_tester)
 try {
     BOOST_REQUIRE(1 == 1);
@@ -63,7 +63,7 @@ try {
 
     transfer_token(token_account, faucet_account_name, "alice"_n, make_asset(10000'0000, usdt_symbol));
 
-    auto trace = transfer_token(token_account, "alice"_n, erc2o_account, make_asset(10000, usdt_symbol), "0x0000000000000000000000000000000000000000");
+    auto trace = transfer_token(token_account, "alice"_n, erc20_account, make_asset(10000, usdt_symbol), "0x0000000000000000000000000000000000000000");
     /*
         BOOST_TEST_MESSAGE(trace->action_traces.size());
         for (const auto& t:trace->action_traces) {
@@ -72,13 +72,13 @@ try {
             BOOST_TEST_MESSAGE(std::string("name:")+ t.act.name.to_string());
         }
     */
-    // TODO: call init of erc2o
+    // TODO: call init of erc20
     // TODO: check call data
     BOOST_REQUIRE(trace->action_traces.back().receiver == evm_account);
     BOOST_REQUIRE(trace->action_traces.back().act.account == evm_account);
     BOOST_REQUIRE(trace->action_traces.back().act.name.to_string() == "call");
 
-    BOOST_REQUIRE_EXCEPTION(transfer_token(eos_token_account, "alice"_n, erc2o_account, make_asset(10000), "0x0000000000000000000000000000000000000000"),
+    BOOST_REQUIRE_EXCEPTION(transfer_token(eos_token_account, "alice"_n, erc20_account, make_asset(10000), "0x0000000000000000000000000000000000000000"),
                             eosio_assert_message_exception, eosio_assert_message_is("received unexpected token"));
 
     produce_block();
@@ -93,10 +93,10 @@ try {
 
     transfer_token(token_account, faucet_account_name, "alice"_n, make_asset(10000'0000, usdt_symbol));
 
-    // Give erc2o some fund
+    // Give erc20 some fund
     // 1 EOS = 10000
-    transfer_token(token_account, "alice"_n, erc2o_account, make_asset(10000, usdt_symbol), "0x0000000000000000000000000000000000000000");
-    BOOST_REQUIRE(10000 == get_balance(erc2o_account, token_account, symbol::from_string("4,USDT")).get_amount());
+    transfer_token(token_account, "alice"_n, erc20_account, make_asset(10000, usdt_symbol), "0x0000000000000000000000000000000000000000");
+    BOOST_REQUIRE(10000 == get_balance(erc20_account, token_account, symbol::from_string("4,USDT")).get_amount());
     produce_block();
     // reserved addr for bob
     // TODO: include silkworm and call function to generate it.
@@ -106,7 +106,7 @@ try {
     // 5000 /1000000 = 0.005 EOS = 50
     gen_bridgemessage(bob, 5000);
 
-    BOOST_REQUIRE(10000 - 50 == get_balance(erc2o_account, token_account, symbol::from_string("4,USDT")).get_amount());
+    BOOST_REQUIRE(10000 - 50 == get_balance(erc20_account, token_account, symbol::from_string("4,USDT")).get_amount());
 
     BOOST_REQUIRE(50 == get_balance("bob"_n, token_account, symbol::from_string("4,USDT")).get_amount());
 }

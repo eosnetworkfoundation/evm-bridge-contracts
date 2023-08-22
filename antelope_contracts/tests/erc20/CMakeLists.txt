@@ -1,4 +1,4 @@
-project(erc2o_tests)
+project(erc20_tests)
 cmake_minimum_required(VERSION 3.12)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20")
@@ -16,9 +16,9 @@ include_directories(
 
 add_eosio_test_executable( unit_test
     ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/erc2o_tester.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/erc20_tester.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/transfer_tests.cpp
 )
 
 # TODO: add back eos-vm-oc once change to disable EOS VM OC subjective limits during unit test are added
-add_test(NAME erc2o_tests COMMAND unit_test --report_level=detailed --color_output )
+add_test(NAME erc20_tests COMMAND unit_test --report_level=detailed --color_output )

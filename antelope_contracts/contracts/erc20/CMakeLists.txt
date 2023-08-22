@@ -6,7 +6,7 @@ find_package(cdt)
 set(SOURCES, "")
 
 list(APPEND SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/erc2o.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/erc20.cpp
 )
 
 # ethash
@@ -26,8 +26,8 @@ list(APPEND SOURCES
 )
 
 
-add_contract( erc2o erc2o ${SOURCES} )
-target_include_directories( erc2o PUBLIC 
+add_contract( erc20 erc20 ${SOURCES} )
+target_include_directories( erc20 PUBLIC 
                             ${CMAKE_CURRENT_SOURCE_DIR}/include 
                             ${CMAKE_BINARY_DIR}/../../
                             ${EXTERNAL_DIR}/silkworm
@@ -37,6 +37,6 @@ target_include_directories( erc2o PUBLIC
                             ${EXTERNAL_DIR}/silkworm/third_party/evmone/lib
                             ${EXTERNAL_DIR}/silkworm/third_party/evmone/evmc/include
                             ${EXTERNAL_DIR}/expected/include    )
-target_ricardian_directory( erc2o ${CMAKE_CURRENT_SOURCE_DIR}/ricardian )
+target_ricardian_directory( erc20 ${CMAKE_CURRENT_SOURCE_DIR}/ricardian )
 
-target_compile_options(erc2o PUBLIC --no-missing-ricardian-clause)
+target_compile_options(erc20 PUBLIC --no-missing-ricardian-clause)

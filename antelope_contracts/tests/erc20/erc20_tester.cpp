@@ -1,4 +1,4 @@
-#include "erc2o_tester.hpp"
+#include "erc20_tester.hpp"
 
 #include <contracts.hpp>
 #include <cstdint>
@@ -17,17 +17,17 @@ using namespace eosio::chain;
 using mvo = fc::mutable_variant_object;
 
 using intx::operator""_u256;
-namespace erc2o_test {
+namespace erc20_test {
 const eosio::chain::name eos_token_account("eosio.token");
 const eosio::chain::symbol eos_token_symbol(4u, "EOS");
 const eosio::chain::name token_account("tethertether");
 const eosio::chain::symbol token_symbol(4u, "USDT");
 const eosio::chain::name evm_account("eosio.evm");
 const eosio::chain::name faucet_account_name("eosio.faucet");
-const eosio::chain::name erc2o_account("eosio.erc2o");
+const eosio::chain::name erc20_account("eosio.erc2o");
 
-erc2o_tester::erc2o_tester(std::string native_symbol_str) : native_symbol(symbol::from_string(native_symbol_str)) {
-    create_accounts({eos_token_account, evm_account, token_account, faucet_account_name, erc2o_account});
+erc20_tester::erc20_tester(std::string native_symbol_str) : native_symbol(symbol::from_string(native_symbol_str)) {
+    create_accounts({eos_token_account, evm_account, token_account, faucet_account_name, erc20_account});
     produce_block();
 
     set_code(eos_token_account, testing::contracts::eosio_token_wasm());
@@ -57,8 +57,8 @@ erc2o_tester::erc2o_tester(std::string native_symbol_str) : native_symbol(symbol
 
     produce_block();
 
-    set_code(erc2o_account, testing::contracts::erc2o_wasm());
-    set_abi(erc2o_account, testing::contracts::erc2o_abi().data());
+    set_code(erc20_account, testing::contracts::erc20_wasm());
+    set_abi(erc20_account, testing::contracts::erc20_abi().data());
 
     produce_block();
 
@@ -70,9 +70,9 @@ erc2o_tester::erc2o_tester(std::string native_symbol_str) : native_symbol(symbol
     token_abi_ser.set_abi(std::move(abi), abi_serializer::create_yield_function(abi_serializer_max_time));
 }
 
-eosio::chain::transaction_trace_ptr erc2o_tester::transfer_token(eosio::chain::name token_account_name, eosio::chain::name from, eosio::chain::name to, eosio::chain::asset quantity, std::string memo) {
+eosio::chain::transaction_trace_ptr erc20_tester::transfer_token(eosio::chain::name token_account_name, eosio::chain::name from, eosio::chain::name to, eosio::chain::asset quantity, std::string memo) {
     return push_action(
         token_account_name, "transfer"_n, from, mvo()("from", from)("to", to)("quantity", quantity)("memo", memo));
 }
 
-}  // namespace erc2o_test
+}  // namespace erc20_test
