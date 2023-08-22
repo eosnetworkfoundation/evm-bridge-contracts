@@ -1,4 +1,4 @@
-#include <solidity/erc2o_bytecode.hpp>
+#include <solidity_contracts/erc20/erc20_bytecode.hpp>
 #include <erc2o/eosio.token.hpp>
 #include <erc2o/erc2o.hpp>
 #include <erc2o/hex.hpp>

@@ -746,6 +746,6 @@ contract ERC1967Proxy is Proxy, ERC1967Upgrade {
 pragma solidity ^0.8.18;
 
 
-contract Erc2oProxy is ERC1967Proxy { 
+contract Erc20Proxy is ERC1967Proxy { 
     constructor(address _logic)  ERC1967Proxy(_logic, abi.encodeWithSignature("initialize()")) {}
 }

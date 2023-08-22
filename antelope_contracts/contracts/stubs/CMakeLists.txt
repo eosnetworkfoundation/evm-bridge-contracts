@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(erc2o_stubs)
+project(stubs_antelope)
 
 find_package(cdt)
 
@@ -11,5 +11,5 @@ list(APPEND SOURCES
 
 add_contract(  stub_evm_runtime stub_evm_runtime ${SOURCES} )
 target_include_directories( stub_evm_runtime PUBLIC 
-                            ${CMAKE_CURRENT_SOURCE_DIR}/../include 
-                            ${CMAKE_BINARY_DIR}/../  )
+                            ${CMAKE_CURRENT_SOURCE_DIR}/include 
+                            ${CMAKE_BINARY_DIR}/  )
