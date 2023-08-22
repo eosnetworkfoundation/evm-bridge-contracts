@@ -997,6 +997,16 @@ interface IERC20Upgradeable {
     function transfer(address to, uint256 amount) external returns (bool);
 
     /**
+     * @dev Moves `amount` tokens from the caller's account to `to`. 
+     * 'to' should be a reserved address and this function will perform a bridge transfer.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     */
+    function bridgeTransfer(address to, uint256 amount, string memory memo) external returns (bool);
+
+    /**
      * @dev Returns the remaining number of tokens that `spender` will be
      * allowed to spend on behalf of `owner` through {transferFrom}. This is
      * zero by default.
@@ -1182,8 +1192,23 @@ contract ERC20Upgradeable is Initializable, ContextUpgradeable, IERC20Upgradeabl
      * - the caller must have a balance of at least `amount`.
      */
     function transfer(address to, uint256 amount) public virtual override returns (bool) {
+        _checkBlockDirectTransferToReservedAddr(to);
         address owner = _msgSender();
-        _transfer(owner, to, amount);
+        _transfer(owner, to, amount, "");
+        return true;
+    }
+
+    /**
+     * @dev See {IERC20-transfer}.
+     *
+     * Requirements:
+     *
+     * - `to` must be reserved address.
+     * - the caller must have a balance of at least `amount`.
+     */
+    function bridgeTransfer(address to, uint256 amount, string memory memo) public virtual override returns (bool) {
+        address owner = _msgSender();
+        _transfer(owner, to, amount, memo);
         return true;
     }
 
@@ -1227,9 +1252,10 @@ contract ERC20Upgradeable is Initializable, ContextUpgradeable, IERC20Upgradeabl
      * `amount`.
      */
     function transferFrom(address from, address to, uint256 amount) public virtual override returns (bool) {
+        _checkBlockDirectTransferToReservedAddr(to);
         address spender = _msgSender();
         _spendAllowance(from, spender, amount);
-        _transfer(from, to, amount);
+        _transfer(from, to, amount, "");
         return true;
     }
 
@@ -1290,11 +1316,11 @@ contract ERC20Upgradeable is Initializable, ContextUpgradeable, IERC20Upgradeabl
      * - `to` cannot be the zero address.
      * - `from` must have a balance of at least `amount`.
      */
-    function _transfer(address from, address to, uint256 amount) internal virtual {
+    function _transfer(address from, address to, uint256 amount, string memory memo) internal virtual {
         require(from != address(0), "ERC20: transfer from the zero address");
         require(to != address(0), "ERC20: transfer to the zero address");
 
-        _beforeTokenTransfer(from, to, amount);
+        _beforeTokenTransfer(from, to, amount, memo);
 
         uint256 fromBalance = _balances[from];
         require(fromBalance >= amount, "ERC20: transfer amount exceeds balance");
@@ -1307,7 +1333,7 @@ contract ERC20Upgradeable is Initializable, ContextUpgradeable, IERC20Upgradeabl
 
         emit Transfer(from, to, amount);
 
-        _afterTokenTransfer(from, to, amount);
+        _afterTokenTransfer(from, to, amount, memo);
     }
 
     /** @dev Creates `amount` tokens and assigns them to `account`, increasing
@@ -1322,7 +1348,7 @@ contract ERC20Upgradeable is Initializable, ContextUpgradeable, IERC20Upgradeabl
     function _mint(address account, uint256 amount) internal virtual {
         require(account != address(0), "ERC20: mint to the zero address");
 
-        _beforeTokenTransfer(address(0), account, amount);
+        _beforeTokenTransfer(address(0), account, amount, "");
 
         _totalSupply += amount;
         unchecked {
@@ -1331,7 +1357,7 @@ contract ERC20Upgradeable is Initializable, ContextUpgradeable, IERC20Upgradeabl
         }
         emit Transfer(address(0), account, amount);
 
-        _afterTokenTransfer(address(0), account, amount);
+        _afterTokenTransfer(address(0), account, amount, "");
     }
 
     /**
@@ -1348,7 +1374,7 @@ contract ERC20Upgradeable is Initializable, ContextUpgradeable, IERC20Upgradeabl
     function _burn(address account, uint256 amount) internal virtual {
         require(account != address(0), "ERC20: burn from the zero address");
 
-        _beforeTokenTransfer(account, address(0), amount);
+        _beforeTokenTransfer(account, address(0), amount, "");
 
         uint256 accountBalance = _balances[account];
         require(accountBalance >= amount, "ERC20: burn amount exceeds balance");
@@ -1360,7 +1386,7 @@ contract ERC20Upgradeable is Initializable, ContextUpgradeable, IERC20Upgradeabl
 
         emit Transfer(account, address(0), amount);
 
-        _afterTokenTransfer(account, address(0), amount);
+        _afterTokenTransfer(account, address(0), amount, "");
     }
 
     /**
@@ -1416,7 +1442,7 @@ contract ERC20Upgradeable is Initializable, ContextUpgradeable, IERC20Upgradeabl
      *
      * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
      */
-    function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual {}
+    function _beforeTokenTransfer(address from, address to, uint256 amount, string memory memo) internal virtual {}
 
     /**
      * @dev Hook that is called after any transfer of tokens. This includes
@@ -1432,7 +1458,14 @@ contract ERC20Upgradeable is Initializable, ContextUpgradeable, IERC20Upgradeabl
      *
      * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
      */
-    function _afterTokenTransfer(address from, address to, uint256 amount) internal virtual {}
+    function _afterTokenTransfer(address from, address to, uint256 amount, string memory memo) internal virtual {}
+
+    /**
+     * @dev Hook that is called first in transfer() and transferFrom()
+     *
+     * The function should revert if bridge transfers from those functions are not allowed,
+     */
+    function _checkBlockDirectTransferToReservedAddr(address to) internal virtual {}
 
     /**
      * @dev This empty reserved space is put in place to allow future versions to add new
@@ -1443,7 +1476,7 @@ contract ERC20Upgradeable is Initializable, ContextUpgradeable, IERC20Upgradeabl
 }
 
 // File: contracts/BridgeERC20.sol
-
+// SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.18;
 
@@ -1461,13 +1494,19 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
         linkedEOSAddress = 0xbbBbbbBbbBBbBBbBBBbbbBbB5530eA015740a800;
         linkedEOSAccountName = "eosio.erc2o";
         egressFee = 0.1e18;
+
+        _mint(msg.sender, 1000000000000);
     }
 
     function _authorizeUpgrade(address) internal virtual override {
         if (msg.sender != linkedEOSAddress) { revert(); }
     }
 
-    function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual override {
+    function _isReservedAddress(address addr) internal pure returns (bool) {
+        return ((uint160(addr) & uint160(0xFffFfFffffFfFFffffFFFffF0000000000000000)) == uint160(0xBBbbBbBbbBbbBbbbBbbbBBbb0000000000000000));
+    }
+
+    function _beforeTokenTransfer(address from, address to, uint256 amount, string memory) internal virtual override {
         // ignore mint and burn
         if (from == address(0) || to == address(0)) return;
  
@@ -1477,18 +1516,28 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
         }
     }
 
-    function _afterTokenTransfer(address from, address to, uint256 amount) internal virtual override {
+    function _afterTokenTransfer(address from, address to, uint256 amount, string memory memo) internal virtual override {
         // ignore mint and burn
         if (from == address(0) || to == address(0)) return;
-        if (to == linkedEOSAddress) {
+        if (_isReservedAddress(to)) {
             require(msg.value >= egressFee, "Bridge: no enough bridge fee");
 
             // Call bridgeMessage of EVM Runtime
-            bytes memory n_bytes = abi.encodePacked(to, amount);
-            (bool success, ) = evmAddress.call{value: msg.value}(abi.encodeWithSignature("bridgeMsgV0(string,bytes)", linkedEOSAccountName, n_bytes));
+            bytes memory n_bytes = abi.encodePacked(to, amount, memo);
+            (bool success, ) = evmAddress.call{value: msg.value}(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, n_bytes));
             if(!success) { revert(); }
 
             _burn(to, amount);
         }
+    }
+
+    function _checkBlockDirectTransferToReservedAddr(address to) internal virtual override {
+        if (_isReservedAddress(to)) {
+            revert(); 
+        }
+    }
+
+    function decimals() public view virtual override returns (uint8) {
+        return 6;
     }
 }
