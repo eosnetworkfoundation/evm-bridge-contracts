@@ -1,8 +1,3 @@
-cmake_minimum_required(VERSION 3.16)
-project(erc20)
-
-find_package(cdt)
-
 set(SOURCES, "")
 
 list(APPEND SOURCES
@@ -29,7 +24,7 @@ list(APPEND SOURCES
 add_contract( erc20 erc20 ${SOURCES} )
 target_include_directories( erc20 PUBLIC 
                             ${CMAKE_CURRENT_SOURCE_DIR}/include 
-                            ${CMAKE_BINARY_DIR}/../../
+                            ${SOLIDITY_BYTECODES_DIR}/
                             ${EXTERNAL_DIR}/silkworm
                             ${EXTERNAL_DIR}/silkworm/third_party/intx/include 
                             ${EXTERNAL_DIR}/silkworm/third_party/ethash/include
@@ -37,6 +32,5 @@ target_include_directories( erc20 PUBLIC
                             ${EXTERNAL_DIR}/silkworm/third_party/evmone/lib
                             ${EXTERNAL_DIR}/silkworm/third_party/evmone/evmc/include
                             ${EXTERNAL_DIR}/expected/include    )
-target_ricardian_directory( erc20 ${CMAKE_CURRENT_SOURCE_DIR}/ricardian )
-
+                            
 target_compile_options(erc20 PUBLIC --no-missing-ricardian-clause)

@@ -741,7 +741,7 @@ contract ERC1967Proxy is Proxy, ERC1967Upgrade {
 }
 
 // File: contracts/Proxy.sol
-
+// SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.18;
 

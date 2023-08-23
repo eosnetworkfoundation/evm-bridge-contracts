@@ -1,11 +1,6 @@
-project(erc20_tests)
-cmake_minimum_required(VERSION 3.12)
+find_package(leap)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20")
-
-find_package(eosio)
-
-enable_testing()
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/contracts.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/contracts.hpp)
 

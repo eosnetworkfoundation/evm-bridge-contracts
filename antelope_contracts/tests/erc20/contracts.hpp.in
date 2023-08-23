@@ -20,14 +20,14 @@ namespace eosio {
 namespace testing {
 
 struct contracts {
-    static std::vector<uint8_t> eosio_token_wasm() { return read_wasm("${antelope_contracts_SOURCE_DIR}/contracts/eosio.token/eosio.token.wasm"); }
-    static std::vector<char> eosio_token_abi() { return read_abi("${antelope_contracts_SOURCE_DIR}/contracts/eosio.token/eosio.token.abi"); }
+    static std::vector<uint8_t> eosio_token_wasm() { return read_wasm("${ANTELOPE_CONTRACTS_SOURCE_DIR}/eosio.token/eosio.token.wasm"); }
+    static std::vector<char> eosio_token_abi() { return read_abi("${ANTELOPE_CONTRACTS_SOURCE_DIR}/eosio.token/eosio.token.abi"); }
 
-    static std::vector<uint8_t> erc20_wasm() { return read_wasm("${antelope_contracts_BINARY_DIR}/contracts/erc20/erc20.wasm"); }
-    static std::vector<char> erc20_abi() { return read_abi("${antelope_contracts_BINARY_DIR}/contracts/erc20/erc20.abi"); }
+    static std::vector<uint8_t> erc20_wasm() { return read_wasm("${ANTELOPE_CONTRACTS_BINARY_DIR}/erc20/erc20.wasm"); }
+    static std::vector<char> erc20_abi() { return read_abi("${ANTELOPE_CONTRACTS_BINARY_DIR}/erc20/erc20.abi"); }
 
-    static std::vector<uint8_t> evm_stub_wasm() { return read_wasm("${antelope_contracts_BINARY_DIR}/contracts/stubs/stub_evm_runtime.wasm"); }
-    static std::vector<char> evm_stub_abi() { return read_abi("${antelope_contracts_BINARY_DIR}/contracts/stubs/stub_evm_runtime.abi"); }
+    static std::vector<uint8_t> evm_stub_wasm() { return read_wasm("${ANTELOPE_CONTRACTS_BINARY_DIR}/stubs/stub_evm_runtime.wasm"); }
+    static std::vector<char> evm_stub_abi() { return read_abi("${ANTELOPE_CONTRACTS_BINARY_DIR}/stubs/stub_evm_runtime.abi"); }
 };
 }  // namespace testing
 }  // namespace eosio
