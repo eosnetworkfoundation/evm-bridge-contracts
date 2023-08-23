@@ -1,5 +1,7 @@
 include(ExternalProject)
 
+find_package(cdt REQUIRED)
+
 ExternalProject_Add(
    contracts
    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/contracts/
