@@ -11,28 +11,97 @@ using namespace intx;
 
 namespace erc20 {
 
+checksum256 make_key(const uint8_t* ptr, size_t len) {
+    uint8_t buffer[32]={0};
+    check(len <= sizeof(buffer), "invalida size");
+    memcpy(buffer, ptr, len);
+    return checksum256(buffer);
+}
+
+checksum256 make_key(bytes data){
+    return make_key((const uint8_t*)data.data(), data.size());
+}
+
 class [[eosio::contract]] erc20 : public contract {
    public:
     using contract::contract;
 
+   struct bridge_message_v0 {
+      eosio::name        receiver;
+      bytes              sender;
+      eosio::time_point  timestamp;
+      bytes              value;
+      bytes              data;
+
+      EOSLIB_SERIALIZE(bridge_message_v0, (receiver)(sender)(timestamp)(value)(data));
+   };
+
+   using bridge_message_t = std::variant<bridge_message_v0>;
+
     [[eosio::on_notify("*::transfer")]] void transfer(eosio::name from, eosio::name to, eosio::asset quantity, std::string memo);
 
     // evm runtime will call this to notify erc20 about the message from 'from' with 'data'.
-    [[eosio::action]] void onbridgemsg(name receiver, const bytes& sender, const time_point& timestamp, const bytes& value, const bytes& data);
-    [[eosio::action]] void init();
+    [[eosio::action]] void onbridgemsg(const bridge_message_t &message);
+    [[eosio::action]] void init(uint64_t nonce);
 
-    struct [[eosio::table]] [[eosio::contract("evm_contract")]] config
+    [[eosio::action]] void regtoken(uint64_t nonce, eosio::name eos_contract_name, const eosio::asset& min_deposit, const eosio::asset& deposit_fee, std::string erc20_impl_address, int erc20_precision);
+
+   struct [[eosio::table("implcontract")]] impl_contract_t {
+      uint64_t       id = 0;
+      bytes          address;
+
+      uint64_t       primary_key() const {
+         return id;
+      }
+      checksum256    by_address()const { 
+        return make_key(address);
+      }
+   };
+   typedef eosio::multi_index<"implcontract"_n, impl_contract_t,
+      indexed_by<"by.address"_n, const_mem_fun<impl_contract_t,  checksum256, &impl_contract_t::by_address> > 
+      > impl_contract_table_t;
+
+   struct [[eosio::table("tokens")]] token_t {
+      uint64_t       id = 0;
+      eosio::name    eos_contract_name;
+      bytes          address; // <== proxy contract addr
+      eosio::asset   min_deposit;
+      eosio::asset   deposit_fee;
+      uint64_t       balance = 0;
+      int            erc20_precision = 0;
+
+      uint64_t primary_key() const {
+         return id;
+      }
+      uint128_t by_contract_symbol() const {
+         uint128_t v = eos_contract_name.value;
+         v <<= 64;
+         v |= min_deposit.symbol.code().raw();
+         return v;
+      }
+      checksum256 by_address()const { 
+        return make_key(address);
+      }
+
+      EOSLIB_SERIALIZE(token_t, (id)(eos_contract_name)(address)(min_deposit)(deposit_fee)(balance)(erc20_precision));
+   };
+   typedef eosio::multi_index<"tokens"_n, token_t,
+      indexed_by<"by.symbol"_n, const_mem_fun<token_t, uint128_t, &token_t::by_contract_symbol> >,
+      indexed_by<"by.address"_n, const_mem_fun<token_t,  checksum256, &token_t::by_address> > 
+      > token_table_t;
+
+    struct [[eosio::table]] config
    {
-      uint8_t erc20_addr[kAddressLength];
+      bytes    erc20_addr;
       EOSLIB_SERIALIZE(config, (erc20_addr));
    };
 
    private:
 
     eosio::singleton<"config"_n, config> _config{get_self(), get_self().value};
-    void handle_evm_transfer(eosio::asset quantity, const std::string &memo);
+    void handle_erc20_transfer(const token_t &token, eosio::asset quantity, const std::string &memo);
 
-    void call(eosio::name from, const bytes &to, uint128_t value, const bytes &data, uint64_t gas_limit);
+    void call(eosio::name from, const bytes &to, const bytes& value, const bytes &data, uint64_t gas_limit);
     using call_action = action_wrapper<"call"_n, &erc20::call>;
 };
 

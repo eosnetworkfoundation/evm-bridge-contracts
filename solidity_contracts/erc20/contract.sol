@@ -1486,16 +1486,18 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
      string public linkedEOSAccountName;
      address public linkedEOSAddress;
      address public evmAddress;
-     uint256 public egressFee;
+     uint8   public precision;
+     //uint256 public egressFee;
      function initialize() initializer public {
         __ERC20_init("Bridged USDT", "USDT");
         __UUPSUpgradeable_init();
         evmAddress = 0xbBBBbBbbbBBBBbbbbbbBBbBB5530EA015b900000;
         linkedEOSAddress = 0xbbBbbbBbbBBbBBbBBBbbbBbB5530eA015740a800;
         linkedEOSAccountName = "eosio.erc2o";
-        egressFee = 0.1e18;
+        precision = 6;
+        //egressFee = 0.1e18;
 
-        _mint(msg.sender, 1000000000000);
+        //_mint(msg.sender, 1000000000000);
     }
 
     function _authorizeUpgrade(address) internal virtual override {
@@ -1520,10 +1522,11 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
         // ignore mint and burn
         if (from == address(0) || to == address(0)) return;
         if (_isReservedAddress(to)) {
-            require(msg.value >= egressFee, "Bridge: no enough bridge fee");
 
             // Call bridgeMessage of EVM Runtime
-            bytes memory n_bytes = abi.encodePacked(to, amount, memo);
+            // using abi.encodePacked: only the last field should be of variable length
+            uint32 app_version = 0x653332e5; // sha("bridgeTransferV0(address,uint,string)")
+            bytes memory n_bytes = abi.encodePacked(app_version, to, amount, memo);
             (bool success, ) = evmAddress.call{value: msg.value}(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, n_bytes));
             if(!success) { revert(); }
 
@@ -1538,6 +1541,6 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
     }
 
     function decimals() public view virtual override returns (uint8) {
-        return 6;
+        return precision;
     }
 }
