@@ -24,7 +24,7 @@ add_custom_command(
 
 set(PROXY_BYTECODE_PATH ${SOLIDITY_BYTECODES_DIR}/erc20/proxy_bytecode.hpp )
 add_custom_command(
-   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/contract.sol
+   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/proxy.sol
    OUTPUT ${PROXY_BYTECODE_PATH}
    COMMAND sh compile_command.sh "${CMAKE_CURRENT_SOURCE_DIR}/proxy.sol" "${CMAKE_CURRENT_BINARY_DIR}/proxy_config.json"> "${PROXY_BYTECODE_PATH}"
    )
