@@ -4,7 +4,7 @@
     {
       "${CONTRACT_NAME}.sol":
       {
-        CONTRACT_CONTENT
+        "content":"__CONTRACT_CONTENT"
       }
     },
     "settings":

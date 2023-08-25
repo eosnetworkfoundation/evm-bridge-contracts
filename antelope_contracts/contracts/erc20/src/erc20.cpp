@@ -1,17 +1,12 @@
 #include <erc20/eosio.token.hpp>
 #include <erc20/erc20.hpp>
 #include <erc20/hex.hpp>
+
+#include <erc20/bytecode.hpp>
+#include <erc20/proxy_bytecode.hpp>
+
 #include <silkworm/core/execution/address.hpp>
 #include <silkworm/core/common/util.hpp>
-
-namespace solidity{
-    namespace erc20 {
-        #include <erc20/bytecode.hpp>
-    }
-    namespace proxy {
-        #include <erc20/proxy_bytecode.hpp>
-    }
-}
 
 namespace erc20 {
 
