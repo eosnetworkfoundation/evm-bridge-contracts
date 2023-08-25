@@ -1,0 +1,6 @@
+[submodule "external/silkworm"]
+	path = external/silkworm
+	url = https://github.com/eosnetworkfoundation/silkworm.git
+[submodule "external/expected"]
+	path = external/expected
+	url = https://github.com/TartanLlama/expected
