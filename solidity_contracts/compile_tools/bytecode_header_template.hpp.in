@@ -2,6 +2,8 @@
 
 namespace solidity::${CONTRACT_NAMESPACE} {
 
-constexpr char bytecode[] = "__CONTRACT_BYTECODE";
+constexpr unsigned char bytecode[] = {
+__CONTRACT_BYTECODE
+};
 
 }

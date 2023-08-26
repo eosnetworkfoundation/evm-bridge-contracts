@@ -57,6 +57,8 @@ cat "$SOLIDITY_SOURCE_FILE_PATH" \
 | jq --stream 'try inputs' `# This and the next line are to work around the fact that solcjs outputs an incomplete JSON` \
 | jq -n 'reduce inputs as $i ({}; if ($i | has(1)) then setpath($i[0]; $i[1]) else . end)' \
 | jq -j '.contracts[][].evm.bytecode.object' `# Get the hex encoding of the bytecode (assumes only one source)` \
+| xxd -r -p \
+| xxd -i \
 | awk -v token="__CONTRACT_BYTECODE" '
     BEGIN {
         RS = "\0"   # Set record separator to null to read the whole input

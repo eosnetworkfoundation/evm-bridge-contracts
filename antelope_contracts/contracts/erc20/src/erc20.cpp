@@ -10,25 +10,32 @@
 
 namespace erc20 {
 
+template <size_t Size>
+void initialize_data(bytes& output, const unsigned char (&arr)[Size]) {
+    output.resize(Size);
+    std::memcpy(output.data(), arr, Size);
+}
+
 void erc20::init() {
     require_auth(get_self());
+
+    bytes call_data;
+
     auto reserved_addr = silkworm::make_reserved_address(get_self().value);
-    auto call_data = from_hex(solidity::erc20::bytecode);
-    eosio::check(!!call_data, "bytecode should not be void");
+    initialize_data(call_data, solidity::erc20::bytecode);
     bytes to = {};
-    // Assumen account opened in evm_runtime
+    // Assume account opened in evm_runtime
     call_action call_act(evm_account, {{get_self(), "active"_n}});
-    call_act.send(get_self(), to, 0, *call_data, evm_init_gaslimit);
+    call_act.send(get_self(), to, 0, call_data, evm_init_gaslimit);
 
     // Assume nonce...
     auto deploy_addr = silkworm::create_address(reserved_addr, 0); 
 
-    call_data = from_hex(solidity::proxy::bytecode);
-    eosio::check(!!call_data, "bytecode should not be void");
-    call_data->insert(call_data->end(), 32 - kAddressLength, 0);  // padding for address
-    call_data->insert(call_data->end(), deploy_addr.bytes, deploy_addr.bytes + kAddressLength);
-    // Assumen account opened in evm_runtime
-    call_act.send(get_self(), to, 0, *call_data, evm_init_gaslimit);
+    initialize_data(call_data, solidity::proxy::bytecode);
+    call_data.insert(call_data.end(), 32 - kAddressLength, 0);  // padding for address
+    call_data.insert(call_data.end(), deploy_addr.bytes, deploy_addr.bytes + kAddressLength);
+    // Assume account opened in evm_runtime
+    call_act.send(get_self(), to, 0, call_data, evm_init_gaslimit);
 
     // Assume nonce...
     deploy_addr = silkworm::create_address(reserved_addr, 1); 
