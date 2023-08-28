@@ -1,7 +1,0 @@
-#pragma once
-
-namespace solidity::${CONTRACT_NAMESPACE} {
-
-constexpr char bytecode[] = "__CONTRACT_BYTECODE";
-
-}

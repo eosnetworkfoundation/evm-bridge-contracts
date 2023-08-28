@@ -29,18 +29,29 @@ checksum256 get_code_hash(name account) {
     return code_hash;
 }
 
+template <size_t Size>
+void initialize_data(bytes& output, const unsigned char (&arr)[Size]) {
+    static_assert(Size > 128); // ensure bytecode is compiled
+    output.resize(Size);
+    std::memcpy(output.data(), arr, Size);
+}
+
 void erc20::init(uint64_t nonce) {
     require_auth(get_self());
+
+    bytes call_data;
+
     auto reserved_addr = silkworm::make_reserved_address(get_self().value);
-    auto call_data = from_hex(solidity::erc20::bytecode);
-    eosio::check(!!call_data && call_data->size(), "bytecode should not be void");
+    initialize_data(call_data, solidity::erc20::bytecode);
+
     bytes to = {};
     bytes value_zero; 
     value_zero.resize(32, 0);
 
     // required account opened in evm_runtime
     call_action call_act(evm_account, {{get_self(), "active"_n}});
-    call_act.send(get_self(), to, value_zero, *call_data, evm_init_gaslimit);
+    call_act.send(get_self(), to, value_zero, call_data, evm_init_gaslimit);
+
 
     evmc::address impl_addr = silkworm::create_address(reserved_addr, nonce); 
 
@@ -75,13 +86,13 @@ void erc20::init(uint64_t nonce) {
     eosio::check(itr != index.end(), "implementation contract must be deployed via erc20::init()");
 
     auto reserved_addr = silkworm::make_reserved_address(get_self().value);
-    auto call_data = from_hex(solidity::proxy::bytecode);
 
-    eosio::check(!!call_data && call_data->size(), "proxy_bytecode should not be void");
+    bytes call_data;
+    initialize_data(call_data, solidity::proxy::bytecode);
 
     // constructor(address erc20_impl_contract)
-    call_data->insert(call_data->end(), 32 - kAddressLength, 0);  // padding for address
-    call_data->insert(call_data->end(), impl_address_bytes->begin(), impl_address_bytes->end());
+    call_data.insert(call_data.end(), 32 - kAddressLength, 0);  // padding for address
+    call_data.insert(call_data.end(), impl_address_bytes->begin(), impl_address_bytes->end());
 
     bytes constructor_data;
     // sha(initialize(uint8 _precision,string memory _name,string memory _symbol,string memory _eos_token_contract)) == 0x0735df57
@@ -113,8 +124,8 @@ void erc20::init(uint64_t nonce) {
     pack_string(constructor_data, evm_token_symbol);         // offset 192
     pack_string(constructor_data, eos_contract_name.to_string()); // offset 256
 
-    pack_uint32(*call_data, 64);
-    pack_string(*call_data, constructor_data);
+    pack_uint32(call_data, 64);
+    pack_string(call_data, constructor_data);
 
     bytes to = {};
     bytes value_zero; 
@@ -122,7 +133,7 @@ void erc20::init(uint64_t nonce) {
 
      // required account opened in evm_runtime
     call_action call_act(evm_account, {{get_self(), "active"_n}});
-    call_act.send(get_self(), to, value_zero, *call_data, evm_init_gaslimit);
+    call_act.send(get_self(), to, value_zero, call_data, evm_init_gaslimit);
 
     evmc::address proxy_contract_addr = silkworm::create_address(reserved_addr, nonce); 
 
