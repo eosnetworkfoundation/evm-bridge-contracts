@@ -62,6 +62,16 @@ erc20_tester::erc20_tester(std::string native_symbol_str) : native_symbol(symbol
 
     produce_block();
 
+    // ./cleos push action eosio.erc2o init '[0]' -p eosio.erc2o
+    push_action(erc20_account, "init"_n, erc20_account, mvo()("nonce", 0));
+
+    produce_block();
+
+    // ./cleos push action eosio.erc2o regtoken '[1,"usdt","EVM USDT Token","WUSDT","0.1000 USDT","0.0100 USDT","4ea3b729669bf6c34f7b80e5d6c17db71f89f21f",6]' -p eosio.erc2o
+    push_action(erc20_account, "regtoken"_n, erc20_account, mvo()("nonce", 1)("eos_contract_name",token_account.to_string())("evm_token_name","EVM USDT V1")("evm_token_symbol","WUSDT")("min_deposit","0.1000 USDT")("deposit_fee","0.0100 USDT")("erc20_impl_address","4ea3b729669bf6c34f7b80e5d6c17db71f89f21f")("erc20_precision",6));
+
+    produce_block();
+
     set_code(evm_account, testing::contracts::evm_stub_wasm());
     set_abi(evm_account, testing::contracts::evm_stub_abi().data());
 

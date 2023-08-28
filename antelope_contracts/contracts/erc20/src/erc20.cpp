@@ -1,8 +1,10 @@
-#include <erc20/bytecode.hpp>
-#include <erc20/proxy_bytecode.hpp>
 #include <erc20/eosio.token.hpp>
 #include <erc20/erc20.hpp>
 #include <erc20/hex.hpp>
+
+#include <erc20/bytecode.hpp>
+#include <erc20/proxy_bytecode.hpp>
+
 #include <silkworm/core/execution/address.hpp>
 #include <silkworm/core/common/util.hpp>
 
@@ -30,8 +32,8 @@ checksum256 get_code_hash(name account) {
 void erc20::init(uint64_t nonce) {
     require_auth(get_self());
     auto reserved_addr = silkworm::make_reserved_address(get_self().value);
-    auto call_data = from_hex(bytecode);
-    eosio::check(!!call_data, "bytecode should not be void");
+    auto call_data = from_hex(solidity::erc20::bytecode);
+    eosio::check(!!call_data && call_data->size(), "bytecode should not be void");
     bytes to = {};
     bytes value_zero; 
     value_zero.resize(32, 0);
@@ -73,9 +75,9 @@ void erc20::init(uint64_t nonce) {
     eosio::check(itr != index.end(), "implementation contract must be deployed via erc20::init()");
 
     auto reserved_addr = silkworm::make_reserved_address(get_self().value);
-    auto call_data = from_hex(proxy_bytecode);
+    auto call_data = from_hex(solidity::proxy::bytecode);
 
-    eosio::check(!!call_data, "proxy_bytecode should not be void");
+    eosio::check(!!call_data && call_data->size(), "proxy_bytecode should not be void");
 
     // constructor(address erc20_impl_contract)
     call_data->insert(call_data->end(), 32 - kAddressLength, 0);  // padding for address
