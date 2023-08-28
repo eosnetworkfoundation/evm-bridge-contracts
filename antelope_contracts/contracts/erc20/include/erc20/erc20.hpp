@@ -102,15 +102,6 @@ class [[eosio::contract]] erc20 : public contract {
    };
    typedef eosio::multi_index<"egresslist"_n, allowed_egress_account> egresslist_table_t;
 
-    struct [[eosio::table]] config
-   {
-      bytes    erc20_addr;
-      EOSLIB_SERIALIZE(config, (erc20_addr));
-   };
-
-   private:
-
-    eosio::singleton<"config"_n, config> _config{get_self(), get_self().value};
     void handle_erc20_transfer(const token_t &token, eosio::asset quantity, const std::string &memo);
 
     void call(eosio::name from, const bytes &to, const bytes& value, const bytes &data, uint64_t gas_limit);
