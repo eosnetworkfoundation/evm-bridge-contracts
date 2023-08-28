@@ -44,7 +44,11 @@ class [[eosio::contract]] erc20 : public contract {
     [[eosio::action]] void onbridgemsg(const bridge_message_t &message);
     [[eosio::action]] void init(uint64_t nonce);
 
-    [[eosio::action]] void regtoken(uint64_t nonce, eosio::name eos_contract_name, const eosio::asset& min_deposit, const eosio::asset& deposit_fee, std::string erc20_impl_address, int erc20_precision);
+    [[eosio::action]] void regtoken(uint64_t nonce, eosio::name eos_contract_name, 
+    std::string evm_token_name, std::string evm_token_symbol, const eosio::asset& min_deposit, const eosio::asset& deposit_fee, std::string erc20_impl_address, int erc20_precision);
+
+    [[eosio::action]] void addegress(const std::vector<name>& accounts);
+    [[eosio::action]] void removeegress(const std::vector<name>& accounts);
 
    struct [[eosio::table("implcontract")]] impl_contract_t {
       uint64_t       id = 0;
@@ -63,11 +67,11 @@ class [[eosio::contract]] erc20 : public contract {
 
    struct [[eosio::table("tokens")]] token_t {
       uint64_t       id = 0;
-      eosio::name    eos_contract_name;
-      bytes          address; // <== proxy contract addr
+      eosio::name    eos_contract_name; 
+      bytes          address; // <-- proxy contract addr
       eosio::asset   min_deposit;
       eosio::asset   deposit_fee;
-      uint64_t       balance = 0;
+      uint64_t       balance = 0; // <-- EVM side's balance
       int            erc20_precision = 0;
 
       uint64_t primary_key() const {
@@ -89,6 +93,14 @@ class [[eosio::contract]] erc20 : public contract {
       indexed_by<"by.symbol"_n, const_mem_fun<token_t, uint128_t, &token_t::by_contract_symbol> >,
       indexed_by<"by.address"_n, const_mem_fun<token_t,  checksum256, &token_t::by_address> > 
       > token_table_t;
+
+   struct [[eosio::table("egresslist")]] allowed_egress_account {
+      eosio::name account;
+
+      uint64_t primary_key() const { return account.value; }
+      EOSLIB_SERIALIZE(allowed_egress_account, (account));
+   };
+   typedef eosio::multi_index<"egresslist"_n, allowed_egress_account> egresslist_table_t;
 
     struct [[eosio::table]] config
    {

@@ -1004,7 +1004,7 @@ interface IERC20Upgradeable {
      *
      * Emits a {Transfer} event.
      */
-    function bridgeTransfer(address to, uint256 amount, string memory memo) external returns (bool);
+    function bridgeTransfer(address to, uint256 amount, string memory memo) external payable returns (bool);
 
     /**
      * @dev Returns the remaining number of tokens that `spender` will be
@@ -1206,7 +1206,7 @@ contract ERC20Upgradeable is Initializable, ContextUpgradeable, IERC20Upgradeabl
      * - `to` must be reserved address.
      * - the caller must have a balance of at least `amount`.
      */
-    function bridgeTransfer(address to, uint256 amount, string memory memo) public virtual override returns (bool) {
+    function bridgeTransfer(address to, uint256 amount, string memory memo) public virtual override payable returns (bool) {
         address owner = _msgSender();
         _transfer(owner, to, amount, memo);
         return true;
@@ -1481,23 +1481,28 @@ contract ERC20Upgradeable is Initializable, ContextUpgradeable, IERC20Upgradeabl
 pragma solidity ^0.8.18;
 
 
-
 contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
-     string public linkedEOSAccountName;
+     string  eos_token_contract;
+     string  public linkedEOSAccountName;
      address public linkedEOSAddress;
      address public evmAddress;
      uint8   public precision;
-     //uint256 public egressFee;
-     function initialize() initializer public {
-        __ERC20_init("Bridged USDT", "USDT");
+     function initialize(uint8   _precision,
+                         string memory _name, 
+                         string memory _symbol,
+                         string memory _eos_token_contract
+                          ) initializer public {
+        __ERC20_init(_name, _symbol);
         __UUPSUpgradeable_init();
         evmAddress = 0xbBBBbBbbbBBBBbbbbbbBBbBB5530EA015b900000;
         linkedEOSAddress = 0xbbBbbbBbbBBbBBbBBBbbbBbB5530eA015740a800;
         linkedEOSAccountName = "eosio.erc2o";
-        precision = 6;
-        //egressFee = 0.1e18;
+        precision = _precision;
+        eos_token_contract = _eos_token_contract;
+    }
 
-        //_mint(msg.sender, 1000000000000);
+    function eosTokenContract() public view returns (string memory) {
+        return eos_token_contract;
     }
 
     function _authorizeUpgrade(address) internal virtual override {
