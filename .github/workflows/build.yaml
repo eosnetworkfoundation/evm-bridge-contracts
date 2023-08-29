@@ -161,24 +161,40 @@ jobs:
       - name: Install CDT
         run: sudo apt-get install -y ./cdt*.deb
 
-      - name: Download leap builddir
-        id: download-leap-build
+      - name: Download leap-dev.deb
         uses: AntelopeIO/asset-artifact-download-action@v3
         with:
           owner: AntelopeIO
           repo: leap
-          file: build.tar.zst
-          target: ${{needs.versions.outputs.leap-target}}
-          artifact-name: ${{matrix.platform}}-build
-          fail-on-missing-target: false
+          file: 'leap-dev.*(x86_64|amd64).deb'
+          target: main
+          artifact-name: leap-dev-ubuntu22-amd64
+          container-package: experimental-binaries
 
-      - name: Extract Leap Build
-        id: extract-leap-build
+      - name: Install leap-dev.deb
         run: |
-          zstdcat build.tar.zst | tar x
-          pushd build
-          echo "LEAP_BUILD_PATH=$(pwd)" >> "$GITHUB_OUTPUT"
-          popd
+          apt-get update && apt-get upgrade -y
+          apt install -y ./leap-dev*.deb
+          rm ./leap-dev*.deb
+
+      # - name: Download leap builddir
+      #   id: download-leap-build
+      #   uses: AntelopeIO/asset-artifact-download-action@v3
+      #   with:
+      #     owner: AntelopeIO
+      #     repo: leap
+      #     file: build.tar.zst
+      #     target: ${{needs.versions.outputs.leap-target}}
+      #     artifact-name: ${{matrix.platform}}-build
+      #     fail-on-missing-target: false
+
+      # - name: Extract Leap Build
+      #   id: extract-leap-build
+      #   run: |
+      #     zstdcat build.tar.zst | tar x
+      #     pushd build
+      #     echo "LEAP_BUILD_PATH=$(pwd)" >> "$GITHUB_OUTPUT"
+      #     popd
 
       - name: Install build dependencies
         run: |
@@ -192,8 +208,16 @@ jobs:
           pushd evm-bridge-contracts
           mkdir build
           pushd build
-          cmake -Dleap_DIR=${{ steps.extract-leap-build.outputs.LEAP_BUILD_PATH }}/lib/cmake/leap ..
+          cmake ..
           make -j
+
+      # - name: Build EVM Bridge Contracts
+      #   run: |
+      #     pushd evm-bridge-contracts
+      #     mkdir build
+      #     pushd build
+      #     cmake -Dleap_DIR=${{ steps.extract-leap-build.outputs.LEAP_BUILD_PATH }}/lib/cmake/leap ..
+      #     make -j
 
       - name: EVM Bridge Contracts Tests
         run: |
