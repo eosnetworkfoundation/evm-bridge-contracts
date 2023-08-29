@@ -62,6 +62,9 @@ jobs:
   build-platforms:
     name: Build Platforms
     needs: d
+    permissions:
+      packages: write
+      contents: read
     if: needs.d.outputs.missing-platforms != '[]'
     strategy:
       fail-fast: false
