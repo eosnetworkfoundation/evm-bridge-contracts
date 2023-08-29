@@ -142,6 +142,13 @@ jobs:
                                   jq                   \
                                   wget
 
+      - name: Authenticate
+        id: auth
+        uses: AntelopeIO/github-app-token-action@v1
+        with:
+          app_id: ${{ secrets.TRUSTEVM_CI_APP_ID }}
+          private_key: ${{ secrets.TRUSTEVM_CI_APP_KEY }}
+
       - name: Checkout evm-bridge-contracts
         uses: actions/checkout@v3
         with:
