@@ -118,8 +118,10 @@ jobs:
 
   build:
     name: EOS EVM Bridge Contracts Build & Test
-    needs: [d, build-platforms, versions]
-    if: always() && needs.d.result == 'success' && (needs.build-platforms.result == 'success' ||  needs.build-platforms.result == 'skipped') && needs.versions.result == 'success'
+    needs: [versions]
+    if: always() && needs.versions.result == 'success'
+    # needs: [d, build-platforms, versions]
+    # if: always() && needs.d.result == 'success' && (needs.build-platforms.result == 'success' ||  needs.build-platforms.result == 'skipped') && needs.versions.result == 'success'
     strategy:
       fail-fast: false
       matrix:
