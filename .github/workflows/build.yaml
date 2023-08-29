@@ -98,8 +98,6 @@ jobs:
     steps:
       - name: Setup versions from input or defaults
         id: versions
-        env:
-          GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
         run: |
           DEFAULTS_JSON=$(curl -sSfL $(gh api https://api.github.com/repos/${{github.repository}}/contents/.cicd/defaults.json?ref=${{github.sha}} --jq .download_url))
           echo leap-target=$(echo "$DEFAULTS_JSON" | jq -r '."leap".target') >> $GITHUB_OUTPUT
@@ -142,19 +140,11 @@ jobs:
                                   jq                   \
                                   wget
 
-      - name: Authenticate
-        id: auth
-        uses: AntelopeIO/github-app-token-action@v1
-        with:
-          app_id: ${{ secrets.TRUSTEVM_CI_APP_ID }}
-          private_key: ${{ secrets.TRUSTEVM_CI_APP_KEY }}
-
       - name: Checkout evm-bridge-contracts
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
           submodules: 'recursive'
-          token: ${{ steps.auth.outputs.token }}
           path: evm-bridge-contracts
 
       - name: Download CDT
@@ -165,7 +155,6 @@ jobs:
           target: '${{needs.versions.outputs.cdt-target}}'
           prereleases: ${{fromJSON(needs.versions.outputs.cdt-prerelease)}}
           file: 'cdt_.*amd64.deb'
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install CDT
         run: apt-get install -y ./cdt*.deb
