@@ -159,7 +159,7 @@ jobs:
           file: 'cdt_.*amd64.deb'
 
       - name: Install CDT
-        run: apt-get install -y ./cdt*.deb
+        run: sudo apt-get install -y ./cdt*.deb
 
       - name: Download leap builddir
         id: download-leap-build
@@ -185,7 +185,7 @@ jobs:
           wget https://nodejs.org/dist/v18.17.0/node-v18.17.0-linux-x64.tar.xz
           tar xvfJ node-v18.17.0-linux-x64.tar.xz
           cp -r node-v18.17.0-linux-x64/{bin,include,lib,share}  /usr/
-          npm install -g solc
+          sudo npm install -g solc
 
       - name: Build EVM Bridge Contracts
         run: |
