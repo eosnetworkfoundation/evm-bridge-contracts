@@ -1,0 +1,65 @@
+
+set(SOLIDITY_COMPILE_TOOLS_DIR "${CMAKE_CURRENT_LIST_DIR}" PARENT_SCOPE)
+
+function(generate_solidity_bytecode_target )
+    set(OPTIONAL_ARGS)
+    set(ONE_VALUE_ARGS 
+        TARGET
+        BYTECODE_HEADER_OUTPUT_PATH
+        CONTRACT_NAME 
+        CONTRACT_SOURCE_PATH 
+        CONTRACT_NAMESPACE 
+        SOLCJS_INPUT_JSON_TEMPLATE_PATH 
+        BYTECODE_HEADER_TEMPLATE_PATH
+    )
+    set(MULTI_VALUE_ARGS)
+    cmake_parse_arguments(ARGS "${OPTIONAL_ARGS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
+
+    if(NOT DEFINED ARGS_BYTECODE_HEADER_OUTPUT_PATH)
+        message(FATAL_ERROR "Call to generate_solidity_bytecode_target is missing required argument BYTECODE_HEADER_OUTPUT_PATH")
+    endif()
+    if(NOT DEFINED ARGS_CONTRACT_NAME)
+        message(FATAL_ERROR "Call to generate_solidity_bytecode_target is missing required argument CONTRACT_NAME")
+    endif()
+    if(NOT DEFINED ARGS_CONTRACT_SOURCE_PATH)
+        message(FATAL_ERROR "Call to generate_solidity_bytecode_target is missing required argument CONTRACT_SOURCE_PATH")
+    endif()
+
+    if(NOT DEFINED ARGS_TARGET)
+        set(ARGS_TARGET ${ARGS_CONTRACT_NAME})
+    endif()    
+    if(NOT DEFINED ARGS_SOLCJS_INPUT_JSON_TEMPLATE_PATH)
+        set(ARGS_SOLCJS_INPUT_JSON_TEMPLATE_PATH "${SOLIDITY_COMPILE_TOOLS_DIR}/solcjs_json_input_template.json.in")
+    endif()
+    if(NOT DEFINED ARGS_BYTECODE_HEADER_TEMPLATE_PATH)
+        if(NOT DEFINED ARGS_CONTRACT_NAMESPACE)
+            message(FATAL_ERROR "Call to generate_solidity_bytecode_target is missing argument CONTRACT_NAMESPACE which must be provided if using default BYTECODE_HEADER_TEMPLATE_PATH")
+        endif()
+        set(ARGS_BYTECODE_HEADER_TEMPLATE_PATH "${SOLIDITY_COMPILE_TOOLS_DIR}/bytecode_header_template.hpp.in")
+    endif()
+
+    set(GENERATED_SOLCJS_INPUT_JSON_TEMPLATE_PATH "${CMAKE_CURRENT_BINARY_DIR}/${ARGS_CONTRACT_NAME}_solcjs_json_input_template.json")
+    set(CONTRACT_NAME "${ARGS_CONTRACT_NAME}")
+    configure_file("${ARGS_SOLCJS_INPUT_JSON_TEMPLATE_PATH}" "${GENERATED_SOLCJS_INPUT_JSON_TEMPLATE_PATH}")
+
+    set(GENERATED_BYTECODE_HEADER_TEMPLATE_PATH "${CMAKE_CURRENT_BINARY_DIR}/${ARGS_CONTRACT_NAME}_bytecode_header_template.hpp")
+    set(CONTRACT_NAMESPACE "${ARGS_CONTRACT_NAMESPACE}")
+    configure_file("${ARGS_BYTECODE_HEADER_TEMPLATE_PATH}" "${GENERATED_BYTECODE_HEADER_TEMPLATE_PATH}")
+
+    get_filename_component(BYTECODE_HEADER_OUTPUT_DIR "${ARGS_BYTECODE_HEADER_OUTPUT_PATH}" DIRECTORY)
+    file(RELATIVE_PATH CONTRACT_SOURCE_REL_PATH "${CMAKE_SOURCE_DIR}" "${ARGS_CONTRACT_SOURCE_PATH}")
+    file(RELATIVE_PATH BYTECODE_HEADER_OUTPUT_REL_PATH "${CMAKE_BINARY_DIR}" "${ARGS_BYTECODE_HEADER_OUTPUT_PATH}")
+
+    add_custom_command(
+        OUTPUT "${ARGS_BYTECODE_HEADER_OUTPUT_PATH}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${BYTECODE_HEADER_OUTPUT_DIR}"
+        COMMAND bash "${SOLIDITY_COMPILE_TOOLS_DIR}/compile_solidity_contract.sh" "${ARGS_CONTRACT_SOURCE_PATH}" "${GENERATED_SOLCJS_INPUT_JSON_TEMPLATE_PATH}" "${GENERATED_BYTECODE_HEADER_TEMPLATE_PATH}" > "${ARGS_BYTECODE_HEADER_OUTPUT_PATH}"
+        DEPENDS "${ARGS_CONTRACT_SOURCE_PATH}"
+        DEPENDS "${GENERATED_SOLCJS_INPUT_JSON_TEMPLATE_PATH}"
+        DEPENDS "${GENERATED_BYTECODE_HEADER_TEMPLATE_PATH}"
+        COMMENT "Compiling '${CONTRACT_SOURCE_REL_PATH}' and generating '${BYTECODE_HEADER_OUTPUT_REL_PATH}'"
+        VERBATIM
+    )
+
+    add_custom_target(${ARGS_TARGET} DEPENDS "${ARGS_BYTECODE_HEADER_OUTPUT_PATH}")
+endfunction()

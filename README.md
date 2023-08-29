@@ -1,21 +1,34 @@
-# evm-bridge-contracts
-Contracts to support the trustless bridge of the EOS EVM
-## Dependency
-- cmake 3.16 or later
-- leap 4.0 or later
-  - currently there's an issue in the v4.0 release of leap that will make it failed to build with c++20. Please either use the main branch of leap or manually apply the fix mentioned in https://github.com/AntelopeIO/leap/issues/1497 for v4.0 branch. 
-- cdt 4.0 or later
-- solc: Used to compile the .sol file. We choose to use solcjs because it is more actively maintained then the solc from rpm.
-    - Install node.js and npm
-    - Install solcjs: 'npm install -g solc'
+# EOS EVM Bridge Contracts
 
-## How to Build
-- cd to 'build' directory
-- run the command 'cmake -Dleap_DIR="${LEAP_BUILD_PATH}/lib/cmake/leap" -Dcdt_DIR="${CDT_BUILD_PATH}/lib/cmake/cdt" ..'
-  - use -Dleap_DIR and -Dcdt_DIR for custom builds of leap and cdt. The program will build with installed ones if they are not set.
-- run the command 'make'
+This repository contains the Solidity and Antelope contracts needed to support advanced functionality of the trustless bridge of EOS EVM.
 
-## How to Test
-The build step above will build the test as well
-- goto ./build
-- 'ctest'
+The `erc20` contracts (both within `solidity_contracts` and `antelope_contracts`) enable tokens to be moved between the EOS EVM and EOS Native environments across the trustless bridge of EOS EVM. On the EOS EVM side, the tokens are managed by an ERC-20 compatible token contract that is automatically deployed to EOS EVM and managed by the Antelope `erc20` contract. On the EOS Native side, the Antelope `erc20` contract supports any tokens that follow the common interface established by the [`eosio.token` reference contract](https://github.com/AntelopeIO/reference-contracts/tree/main/contracts/eosio.token); specifically, the token contract deployed on EOS Native must satisfy the interface for the `transfer` action captured in [this header file](antelope_contracts/contracts/erc20/include/erc20/eosio.token.hpp) and its behavior should follow the expectations set in the `eosio.token` reference contract.
+## Dependencies
+
+- CMake 3.16 or later
+- [Leap](https://github.com/AntelopeIO/leap) 4.0 or later
+  + Currently there is an issue in the 4.0 release of Leap that causes test to fail to build with C++20 (which is necessary due to the silkworm dependency of the erc20 contract).
+  + To work around this issue, one option is to build Leap from the main branch of the [leap](https://github.com/AntelopeIO/leap) repo which has changes to support building Leap with C++20.
+  + An alternative workaround for this issue is to apply the fix mentioned in https://github.com/AntelopeIO/leap/issues/1497 to a copy of the [release/4.0](https://github.com/AntelopeIO/leap/tree/release/4.0) branch before building Leap. The branch [4.0-with-evm-fix](https://github.com/AntelopeIO/leap/tree/4.0-with-evm-fix) is also available with the fix already applied to a recent copy of the release/4.0 branch. 
+- [CDT](https://github.com/AntelopeIO/cdt) 4.0 or later
+- solc
+  + Used to compile the .sol files. 
+  + We chose to use solcjs because it is more actively maintained than the solc available from the package manager.
+    * First install node.js and npm.
+    * Then install solcjs: `npm install -g solc`
+
+## Building
+
+Create a `build` directory within the root of the cloned repo and `cd` into it.
+
+Run `cmake -Dleap_DIR="${LEAP_BUILD_PATH}/lib/cmake/leap" -Dcdt_DIR="${CDT_BUILD_PATH}/lib/cmake/cdt" ..` from within the `build` directory. 
+Here we assume that environment variables `LEAP_BUILD_PATH` and `CDT_BUILD_PATH` are set to the build directories for the Leap and CDT dependencies, respectively.
+The `-Dleap_DIR` and `-Dcdt_DIR` options are used to specify custom builds of Leap and CDT, respectively. If you have installed the appropriate version of CDT on the system, you can leave off the `-Dcdt_DIR`. Even if you have installed Leap binaries on the system, you will still need to build Leap and use `-Dleap_DIR` because the build directory contains specific testing libraries needed for building the unit tests for the bridge contracts.
+
+Run the command `make -j`.
+
+## Running tests
+
+The build steps above will build the test as well.
+
+After building, `cd` into the `build` directory and then simply run `ctest`.
