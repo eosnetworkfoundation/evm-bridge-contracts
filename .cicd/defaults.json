@@ -1,6 +1,6 @@
 {
     "leap":{
-       "target":"release/4.0"
+       "target":"main"
     },
     "cdt":{
        "target":"4",
