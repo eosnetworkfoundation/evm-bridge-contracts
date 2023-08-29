@@ -173,8 +173,8 @@ jobs:
 
       - name: Install leap-dev.deb
         run: |
-          apt-get update && apt-get upgrade -y
-          apt install -y ./leap-dev*.deb
+          sudo apt-get update && apt-get upgrade -y
+          sudo apt install -y ./leap-dev*.deb
           rm ./leap-dev*.deb
 
       # - name: Download leap builddir
