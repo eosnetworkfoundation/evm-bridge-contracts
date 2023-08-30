@@ -36,7 +36,14 @@ void initialize_data(bytes& output, const unsigned char (&arr)[Size]) {
     std::memcpy(output.data(), arr, Size);
 }
 
-void erc20::init(uint64_t nonce) {
+uint64_t erc20::my_next_nonce() { // lookup nonce from the multi_index table of evm contract
+    nextnonces_table_t table(evm_account, evm_account.value);
+    auto itr = table.find(get_self().value);
+    if (itr == table.end()) return 0;
+    else return itr->next_nonce;
+}
+
+void erc20::init() {
     require_auth(get_self());
 
     bytes call_data;
@@ -53,7 +60,7 @@ void erc20::init(uint64_t nonce) {
     call_act.send(get_self(), to, value_zero, call_data, evm_init_gaslimit);
 
 
-    evmc::address impl_addr = silkworm::create_address(reserved_addr, nonce); 
+    evmc::address impl_addr = silkworm::create_address(reserved_addr, my_next_nonce()); 
 
     impl_contract_table_t contract_table(_self, _self.value);
     contract_table.emplace(_self, [&](auto &v) {
@@ -63,14 +70,27 @@ void erc20::init(uint64_t nonce) {
     });
 }
 
-[[eosio::action]] void erc20::regtoken(uint64_t nonce, eosio::name eos_contract_name, std::string evm_token_name, std::string evm_token_symbol, const eosio::asset& min_deposit, const eosio::asset& deposit_fee, std::string erc20_impl_address, int erc20_precision) {
+[[eosio::action]] void erc20::regtoken(eosio::name eos_contract_name, std::string evm_token_name, std::string evm_token_symbol, const eosio::asset& min_deposit, const eosio::asset& deposit_fee, const eosio::asset &egress_fee, std::string erc20_impl_address, int erc20_precision) {
     require_auth(get_self());
 
-    eosio::check(evm_token_name.length() > 0 && evm_token_name.length() < 32, "invalid evm_token_name");
-    eosio::check(evm_token_symbol.length() > 0 && evm_token_symbol.length() < 32, "invalid evm_token_symbol");
+    eosio::check(eos_contract_name.value, "invalid eos_contract_name");
+    
+    // keep the name & symbol fit into 32 byte, which is the alignment in EVM
+    eosio::check(evm_token_name.length() > 0 && evm_token_name.length() < 32, "invalid evm_token_name length");
+    eosio::check(evm_token_symbol.length() > 0 && evm_token_symbol.length() < 32, "invalid evm_token_symbol length");
+
+    // 2^(256-64) = 6.2e+57, so the precision diff is at most 57
+    eosio::check(erc20_precision >= min_deposit.symbol.precision() &&
+    erc20_precision <= min_deposit.symbol.precision() + 57, "erc20 precision out of range");
 
     std::optional<bytes> impl_address_bytes = from_hex(erc20_impl_address);
     eosio::check(!!impl_address_bytes && impl_address_bytes->size() == kAddressLength, "invalid erc20 address");
+
+    eosio::check(min_deposit.symbol == deposit_fee.symbol, "deposit_fee should have the same symbol of min_deposit");
+
+    eosio::check(egress_fee.symbol == native_token_symbol, "egress_fee should have native token symbol");
+    intx::uint256 egress_fee_evm = egress_fee.amount;
+    egress_fee_evm *= minimum_natively_representable;
 
     uint128_t v = eos_contract_name.value;
     v <<= 64;
@@ -95,10 +115,15 @@ void erc20::init(uint64_t nonce) {
     call_data.insert(call_data.end(), impl_address_bytes->begin(), impl_address_bytes->end());
 
     bytes constructor_data;
-    // sha(initialize(uint8 _precision,string memory _name,string memory _symbol,string memory _eos_token_contract)) == 0x0735df57
-    uint8_t func_[4] = {0x07,0x35,0xdf,0x57};
+    // sha(function initialize(uint8 _precision,uint256 _egressFee,string memory _name,string memory _symbol,string memory _eos_token_contract)) == 0xd66d4ac3
+    uint8_t func_[4] = {0xd6,0x6d,0x4a,0xc3};
     constructor_data.insert(constructor_data.end(), func_, func_ + sizeof(func_));
-    
+
+    auto pack_uint256 = [&](bytes &ds, const intx::uint256 &val) {
+        uint8_t val_[32] = {};
+        intx::be::store(val_, val);
+        ds.insert(ds.end(), val_, val_ + sizeof(val_));
+    };
     auto pack_uint32 = [&](bytes &ds, uint32_t val) {
         uint8_t val_[32] = {};
         val_[28] = (uint8_t)(val >> 24);
@@ -117,15 +142,16 @@ void erc20::init(uint64_t nonce) {
     };
 
     pack_uint32(constructor_data, (uint8_t)erc20_precision); // offset 0
-    pack_uint32(constructor_data, 128);                      // offset 32
-    pack_uint32(constructor_data, 192);                      // offset 64
-    pack_uint32(constructor_data, 256);                      // offset 96
-    pack_string(constructor_data, evm_token_name);           // offset 128
-    pack_string(constructor_data, evm_token_symbol);         // offset 192
-    pack_string(constructor_data, eos_contract_name.to_string()); // offset 256
+    pack_uint256(constructor_data, egress_fee_evm);          // offset 32
+    pack_uint32(constructor_data, 160);                      // offset 64
+    pack_uint32(constructor_data, 224);                      // offset 96
+    pack_uint32(constructor_data, 288);                      // offset 128
+    pack_string(constructor_data, evm_token_name);           // offset 160
+    pack_string(constructor_data, evm_token_symbol);         // offset 224
+    pack_string(constructor_data, eos_contract_name.to_string()); // offset 288
 
-    pack_uint32(call_data, 64);
-    pack_string(call_data, constructor_data);
+    pack_uint32(call_data, 64);                  // offset 32
+    pack_string(call_data, constructor_data);    // offset 64
 
     bytes to = {};
     bytes value_zero; 
@@ -135,7 +161,7 @@ void erc20::init(uint64_t nonce) {
     call_action call_act(evm_account, {{get_self(), "active"_n}});
     call_act.send(get_self(), to, value_zero, call_data, evm_init_gaslimit);
 
-    evmc::address proxy_contract_addr = silkworm::create_address(reserved_addr, nonce); 
+    evmc::address proxy_contract_addr = silkworm::create_address(reserved_addr, my_next_nonce()); 
 
     token_table.emplace(_self, [&](auto &v) {
         v.eos_contract_name = eos_contract_name;
@@ -178,10 +204,9 @@ void erc20::onbridgemsg(const bridge_message_t &message) {
         intx::uint256 value{}, zero{0_u256};
         value = intx::be::load<intx::uint256>(amount_bytes);
 
-        for (int i = itr->erc20_precision - itr->min_deposit.symbol.precision(); i > 0; --i) {
-            check(value % 10 == zero, "bridge amount can not have dust");
-            value /= 10;
-        }
+        intx::uint256 mult = intx::exp(10_u256, intx::uint256(itr->erc20_precision - itr->min_deposit.symbol.precision()));
+        check(value % mult == zero, "bridge amount can not have dust");
+        value /= mult;
 
         uint64_t dest_amount = (uint64_t)value;
         check(intx::uint256(dest_amount) == value && dest_amount < (1ull<<62)-1, "bridge amount value overflow");
@@ -245,10 +270,7 @@ void erc20::handle_erc20_transfer(const token_t &token, eosio::asset quantity, c
     eosio::check(address_bytes->size() == kAddressLength, "memo must be valid 0x EVM address");
 
     intx::uint256 value((uint64_t)quantity.amount);
-
-    for (int i = token.erc20_precision - quantity.symbol.precision(); i > 0; --i) {
-        value *= 10;
-    }
+    value *= intx::exp(10_u256, intx::uint256(token.erc20_precision - quantity.symbol.precision()));
 
     uint8_t value_buffer[32] = {};
     intx::be::store(value_buffer, value);

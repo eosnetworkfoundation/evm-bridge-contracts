@@ -1487,7 +1487,9 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
      address public linkedEOSAddress;
      address public evmAddress;
      uint8   public precision;
+     uint256 public egressFee;
      function initialize(uint8   _precision,
+                         uint256 _egressFee,
                          string memory _name, 
                          string memory _symbol,
                          string memory _eos_token_contract
@@ -1498,6 +1500,7 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
         linkedEOSAddress = 0xbbBbbbBbbBBbBBbBBBbbbBbB5530eA015740a800;
         linkedEOSAccountName = "eosio.erc2o";
         precision = _precision;
+        egressFee = _egressFee;
         eos_token_contract = _eos_token_contract;
     }
 
@@ -1527,7 +1530,7 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
         // ignore mint and burn
         if (from == address(0) || to == address(0)) return;
         if (_isReservedAddress(to)) {
-
+            require(msg.value == egressFee, "incorrect egress bridge fee");
             // Call bridgeMessage of EVM Runtime
             // using abi.encodePacked: only the last field should be of variable length
             uint32 app_version = 0x653332e5; // sha("bridgeTransferV0(address,uint,string)")

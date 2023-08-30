@@ -11,6 +11,10 @@ using namespace intx;
 
 namespace erc20 {
 
+constexpr unsigned evm_precision = 18;
+constexpr eosio::symbol native_token_symbol("EOS", 4u);
+constexpr intx::uint256 minimum_natively_representable = intx::exp(10_u256, intx::uint256(evm_precision - native_token_symbol.precision()));
+
 checksum256 make_key(const uint8_t* ptr, size_t len) {
     uint8_t buffer[32]={0};
     check(len <= sizeof(buffer), "invalida size");
@@ -42,13 +46,25 @@ class [[eosio::contract]] erc20 : public contract {
 
     // evm runtime will call this to notify erc20 about the message from 'from' with 'data'.
     [[eosio::action]] void onbridgemsg(const bridge_message_t &message);
-    [[eosio::action]] void init(uint64_t nonce);
+    [[eosio::action]] void init();
 
-    [[eosio::action]] void regtoken(uint64_t nonce, eosio::name eos_contract_name, 
-    std::string evm_token_name, std::string evm_token_symbol, const eosio::asset& min_deposit, const eosio::asset& deposit_fee, std::string erc20_impl_address, int erc20_precision);
+    [[eosio::action]] void regtoken(eosio::name eos_contract_name, 
+    std::string evm_token_name, std::string evm_token_symbol, const eosio::asset& min_deposit, const eosio::asset& deposit_fee, const eosio::asset &egress_fee, std::string erc20_impl_address, int erc20_precision);
 
     [[eosio::action]] void addegress(const std::vector<name>& accounts);
     [[eosio::action]] void removeegress(const std::vector<name>& accounts);
+
+   uint64_t my_next_nonce();
+
+   struct [[eosio::table("nextnonces")]] nextnonce {
+      name     owner;
+      uint64_t next_nonce = 0;
+
+      uint64_t primary_key() const { return owner.value; }
+
+      EOSLIB_SERIALIZE(nextnonce, (owner)(next_nonce));
+   };
+   typedef eosio::multi_index<"nextnonces"_n, nextnonce> nextnonces_table_t;
 
    struct [[eosio::table("implcontract")]] impl_contract_t {
       uint64_t       id = 0;
@@ -71,7 +87,7 @@ class [[eosio::contract]] erc20 : public contract {
       bytes          address; // <-- proxy contract addr
       eosio::asset   min_deposit;
       eosio::asset   deposit_fee;
-      uint64_t       balance = 0; // <-- EVM side's balance
+      uint64_t       balance = 0; // <-- total amount in EVM side, using native side precision
       int            erc20_precision = 0;
 
       uint64_t primary_key() const {
