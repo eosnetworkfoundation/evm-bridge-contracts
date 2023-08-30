@@ -45,7 +45,8 @@ void erc20::init() {
         .erc20_addr = {},
     };
 
-    memcpy(new_config.erc20_addr, deploy_addr.bytes, kAddressLength);
+    new_config.erc20_addr.resize(kAddressLength);
+    memcpy(new_config.erc20_addr.data(), deploy_addr.bytes, kAddressLength);
 
     _config.set(new_config, get_self());
 }
