@@ -21,9 +21,10 @@ class [[eosio::contract]] erc20 : public contract {
     [[eosio::action]] void onbridgemsg(name receiver, const bytes& sender, const time_point& timestamp, const bytes& value, const bytes& data);
     [[eosio::action]] void init();
 
-    struct [[eosio::table]] [[eosio::contract("evm_contract")]] config
+    struct [[eosio::table]] config
    {
-      uint8_t erc20_addr[kAddressLength];
+      bytes erc20_addr;
+
       EOSLIB_SERIALIZE(config, (erc20_addr));
    };
 
