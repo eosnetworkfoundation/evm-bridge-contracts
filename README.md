@@ -18,6 +18,8 @@ The `erc20` contracts (both within `solidity_contracts` and `antelope_contracts`
     * Then install solcjs: `npm install -g solc`
 - Install `jq` used to compile solidity contracts
   + `apt-get install jq`
+- Install `xxd` used to compile solidity contracts
+  + `apt-get install xxd`
 
 ## Building
 
