@@ -128,18 +128,6 @@ jobs:
     container: ${{fromJSON(needs.d.outputs.p)[matrix.platform].image}}
 
     steps:
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get upgrade -y
-          sudo apt-get install -y build-essential      \
-                                  cmake                \
-                                  gcc-11               \
-                                  g++-11               \
-                                  git                  \
-                                  jq                   \
-                                  wget
-
       - name: Checkout evm-bridge-contracts
         uses: actions/checkout@v3
         with:
@@ -157,7 +145,7 @@ jobs:
           file: 'cdt_.*amd64.deb'
 
       - name: Install CDT
-        run: sudo apt-get install -y ./cdt*.deb
+        run: apt-get install -y ./cdt*.deb
 
       - name: Download leap-dev.deb
         uses: AntelopeIO/asset-artifact-download-action@v3
@@ -171,15 +159,15 @@ jobs:
 
       - name: Install leap-dev.deb
         run: |
-          sudo apt install -y ./leap-dev*.deb
+          apt install -y ./leap-dev*.deb
           rm ./leap-dev*.deb
 
       - name: Install build dependencies
         run: |
           wget https://nodejs.org/dist/v18.17.0/node-v18.17.0-linux-x64.tar.xz
           tar xvfJ node-v18.17.0-linux-x64.tar.xz
-          sudo cp -r node-v18.17.0-linux-x64/{bin,include,lib,share}  /usr/
-          sudo npm install -g solc
+          cp -r node-v18.17.0-linux-x64/{bin,include,lib,share}  /usr/
+          npm install -g solc
 
       - name: Build EVM Bridge Contracts
         run: |
