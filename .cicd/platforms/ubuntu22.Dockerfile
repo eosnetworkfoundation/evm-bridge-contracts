@@ -8,4 +8,5 @@ RUN apt-get update && apt-get upgrade -y && \
                        g++-11               \
                        git                  \
                        jq                   \
-                       wget
+                       wget                 \
+                       xxd
