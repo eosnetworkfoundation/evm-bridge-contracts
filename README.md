@@ -16,8 +16,14 @@ The `erc20` contracts (both within `solidity_contracts` and `antelope_contracts`
   + We chose to use solcjs because it is more actively maintained than the solc available from the package manager.
     * First install node.js and npm.
     * Then install solcjs: `npm install -g solc`
+- Install `jq` used to compile solidity contracts
+  + `apt-get install jq`
+- Install `xxd` used to compile solidity contracts
+  + `apt-get install xxd`
 
 ## Building
+
+Update submodules by running: `git submodule update --init --recursive`
 
 Create a `build` directory within the root of the cloned repo and `cd` into it.
 
