@@ -155,13 +155,6 @@ jobs:
           apt install -y ./leap-dev*.deb
           rm ./leap-dev*.deb
 
-      - name: Install build dependencies
-        run: |
-          wget https://nodejs.org/dist/v18.17.0/node-v18.17.0-linux-x64.tar.xz
-          tar xvfJ node-v18.17.0-linux-x64.tar.xz
-          cp -r node-v18.17.0-linux-x64/{bin,include,lib,share}  /usr/
-          npm install -g solc
-
       - name: Build EVM Bridge Contracts
         run: |
           pushd evm-bridge-contracts
