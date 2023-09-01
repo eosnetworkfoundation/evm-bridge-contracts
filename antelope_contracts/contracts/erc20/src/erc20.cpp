@@ -50,6 +50,10 @@ uint64_t erc20::get_next_nonce() {
 void erc20::upgrade() {
     require_auth(get_self());
 
+    uint64_t id = 0;
+    impl_contract_table_t contract_table(_self, _self.value);
+    check(contract_table.find(id) == contract_table.end(), "implementation contract already deployed");
+
     bytes call_data;
 
     auto reserved_addr = silkworm::make_reserved_address(erc2o_account.value);
@@ -67,11 +71,6 @@ void erc20::upgrade() {
 
     evmc::address impl_addr = silkworm::create_address(reserved_addr, next_nonce); 
 
-    uint64_t id = 0;
-    impl_contract_table_t contract_table(_self, _self.value);
-
-    check(contract_table.find(id) == contract_table.end(), "implementation contract already deployed");
-
     contract_table.emplace(_self, [&](auto &v) {
         v.id = id;
         v.address.resize(kAddressLength);
@@ -79,7 +78,7 @@ void erc20::upgrade() {
     });
 }
 
-[[eosio::action]] void erc20::regtoken(eosio::name token_contract, std::string evm_token_name, std::string evm_token_symbol, const eosio::asset& deposit_fee, const eosio::asset &egress_fee, uint8_t erc20_precision) {
+[[eosio::action]] void erc20::regtoken(eosio::name token_contract, std::string evm_token_name, std::string evm_token_symbol, const eosio::asset& ingress_fee, const eosio::asset &egress_fee, uint8_t erc20_precision) {
     require_auth(get_self());
 
     eosio::check(eosio::is_account(token_contract), "invalid token_contract");
@@ -89,8 +88,8 @@ void erc20::upgrade() {
     eosio::check(evm_token_symbol.length() > 0 && evm_token_symbol.length() < 32, "invalid evm_token_symbol length");
 
     // 2^(256-64) = 6.2e+57, so the precision diff is at most 57
-    eosio::check(erc20_precision >= deposit_fee.symbol.precision() &&
-    erc20_precision <= deposit_fee.symbol.precision() + 57, "erc20 precision out of range");
+    eosio::check(erc20_precision >= ingress_fee.symbol.precision() &&
+    erc20_precision <= ingress_fee.symbol.precision() + 57, "erc20 precision out of range");
 
     eosio::check(egress_fee.symbol == native_token_symbol, "egress_fee should have native token symbol");
     intx::uint256 egress_fee_evm = egress_fee.amount;
@@ -98,7 +97,7 @@ void erc20::upgrade() {
 
     uint128_t v = token_contract.value;
     v <<= 64;
-    v |= deposit_fee.symbol.code().raw();
+    v |= ingress_fee.symbol.code().raw();
     token_table_t token_table(_self, _self.value);
     auto index_symbol = token_table.get_index<"by.symbol"_n>();
     check(index_symbol.find(v) == index_symbol.end(), "token already registered");
@@ -173,8 +172,8 @@ void erc20::upgrade() {
         v.token_contract = token_contract;
         v.address.resize(kAddressLength, 0);
         memcpy(&(v.address[0]), proxy_contract_addr.bytes, kAddressLength);
-        v.deposit_fee = deposit_fee;
-        v.balance = deposit_fee;
+        v.ingress_fee = ingress_fee;
+        v.balance = ingress_fee;
         v.balance.amount = 0;
         v.fee_balance = v.balance;
         v.erc20_precision = erc20_precision;
@@ -220,7 +219,7 @@ void erc20::onbridgemsg(const bridge_message_t &message) {
         };
 
         intx::uint256 value = read_uint256(msg, 4 + 32);
-        intx::uint256 mult = intx::exp(10_u256, intx::uint256(itr->erc20_precision - itr->deposit_fee.symbol.precision()));
+        intx::uint256 mult = intx::exp(10_u256, intx::uint256(itr->erc20_precision - itr->ingress_fee.symbol.precision()));
         check(value % mult == 0_u256, "bridge amount can not have dust");
         value /= mult;
 
@@ -245,7 +244,7 @@ void erc20::onbridgemsg(const bridge_message_t &message) {
         }
 
         eosio::token::transfer_action transfer_act(itr->token_contract, {{get_self(), "active"_n}});
-        transfer_act.send(get_self(), dest_eos_acct, eosio::asset(dest_amount, itr->deposit_fee.symbol), memo);
+        transfer_act.send(get_self(), dest_eos_acct, eosio::asset(dest_amount, itr->ingress_fee.symbol), memo);
 
         token_table.modify(*itr, _self, [&](auto &v) {
             v.balance.amount -= dest_amount;
@@ -268,18 +267,18 @@ void erc20::transfer(eosio::name from, eosio::name to, eosio::asset quantity,
     auto index = token_table.get_index<"by.symbol"_n>();
     auto itr = index.find(v);
 
-    eosio::check(itr != index.end() && itr->deposit_fee.symbol == quantity.symbol, "received unregistered token");
-    eosio::check(quantity.amount > itr->deposit_fee.amount, "deposit amount must be greater than ingress fee");
+    eosio::check(itr != index.end() && itr->ingress_fee.symbol == quantity.symbol, "received unregistered token");
+    eosio::check(quantity.amount > itr->ingress_fee.amount, "deposit amount must be greater than ingress fee");
 
-    uint64_t deposit_fee = itr->deposit_fee.amount;
-    quantity.amount -= deposit_fee;
+    uint64_t ingress_fee = itr->ingress_fee.amount;
+    quantity.amount -= ingress_fee;
     eosio::check(quantity.amount > 0 && quantity.amount < (1ll<<62)-1, "deposit amount overflow");
 
     if (memo.size() == 42 && memo[0] == '0' && memo[1] == 'x') {
         handle_erc20_transfer(*itr, quantity, memo);
         token_table.modify(*itr, _self, [&](auto &v) {
             v.balance.amount += quantity.amount;
-            v.fee_balance.amount += deposit_fee;
+            v.fee_balance.amount += ingress_fee;
         });
     } else
         eosio::check(false, "memo must be 0x EVM address");

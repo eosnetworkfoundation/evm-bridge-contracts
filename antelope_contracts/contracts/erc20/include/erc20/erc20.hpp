@@ -45,7 +45,7 @@ class [[eosio::contract]] erc20 : public contract {
     [[eosio::action]] void upgrade();
 
     [[eosio::action]] void regtoken(eosio::name eos_contract_name, 
-    std::string evm_token_name, std::string evm_token_symbol, const eosio::asset& deposit_fee, const eosio::asset &egress_fee, uint8_t erc20_precision);
+    std::string evm_token_name, std::string evm_token_symbol, const eosio::asset& ingress_fee, const eosio::asset &egress_fee, uint8_t erc20_precision);
 
     [[eosio::action]] void addegress(const std::vector<name>& accounts);
     [[eosio::action]] void removeegress(const std::vector<name>& accounts);
@@ -75,7 +75,7 @@ class [[eosio::contract]] erc20 : public contract {
       uint64_t       id = 0;
       eosio::name    token_contract; 
       bytes          address; // <-- proxy contract addr
-      eosio::asset   deposit_fee;
+      eosio::asset   ingress_fee;
       eosio::asset   balance; // <-- total amount in EVM side
       eosio::asset   fee_balance;
       int            erc20_precision = 0;
@@ -86,14 +86,14 @@ class [[eosio::contract]] erc20 : public contract {
       uint128_t by_contract_symbol() const {
          uint128_t v = token_contract.value;
          v <<= 64;
-         v |= deposit_fee.symbol.code().raw();
+         v |= ingress_fee.symbol.code().raw();
          return v;
       }
       checksum256 by_address()const { 
         return make_key(address);
       }
 
-      EOSLIB_SERIALIZE(token_t, (id)(token_contract)(address)(deposit_fee)(balance)(fee_balance)(erc20_precision));
+      EOSLIB_SERIALIZE(token_t, (id)(token_contract)(address)(ingress_fee)(balance)(fee_balance)(erc20_precision));
    };
    typedef eosio::multi_index<"tokens"_n, token_t,
       indexed_by<"by.symbol"_n, const_mem_fun<token_t, uint128_t, &token_t::by_contract_symbol> >,
