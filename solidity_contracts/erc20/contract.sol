@@ -1537,7 +1537,6 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
         if (_isReservedAddress(to)) {
             require(msg.value == egressFee, "incorrect egress bridge fee");
             // Call bridgeMessage of EVM Runtime
-            // using abi.encodePacked: only the last field should be of variable length
             // sha("bridgeTransferV0(address,uint256,string)") = 0x653332e5
             bytes memory receiver_msg = abi.encodeWithSignature("bridgeTransferV0(address,uint256,string)", to, amount, memo);
             (bool success, ) = evmAddress.call{value: msg.value}(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, receiver_msg ));
