@@ -28,6 +28,16 @@ on:
         - default
         - true
         - false
+      override-eos-evm-contract:
+        description: 'Override eos-evm-contract target'
+        type: string
+      override-eos-evm-contract-prerelease:
+        type: choice
+        description: Override eos-evm-contract prelease
+        options:
+        - default
+        - true
+        - false
 
 defaults:
   run:
@@ -83,6 +93,8 @@ jobs:
       leap-dev-prerelease: ${{steps.versions.outputs.leap-dev-prerelease}}
       cdt-target: ${{steps.versions.outputs.cdt-target}}
       cdt-prerelease: ${{steps.versions.outputs.cdt-prerelease}}
+      eos-evm-contract-target: ${{steps.versions.outputs.eos-evm-contract-target}}
+      eos-evm-contract-prerelease: ${{steps.versions.outputs.eos-evm-contract-prerelease}}
     steps:
       - name: Setup versions from input or defaults
         id: versions
@@ -94,6 +106,8 @@ jobs:
           echo leap-dev-prerelease=$(echo "$DEFAULTS_JSON" | jq -r '."leap-dev".prerelease') >> $GITHUB_OUTPUT
           echo cdt-target=$(echo "$DEFAULTS_JSON" | jq -r '."cdt".target') >> $GITHUB_OUTPUT
           echo cdt-prerelease=$(echo "$DEFAULTS_JSON" | jq -r '."cdt".prerelease') >> $GITHUB_OUTPUT
+          echo eos-evm-contract-target=$(echo "$DEFAULTS_JSON" | jq -r '."eos-evm-contract".target') >> $GITHUB_OUTPUT
+          echo eos-evm-contract-prerelease=$(echo "$DEFAULTS_JSON" | jq -r '."eos-evm-contract".prerelease') >> $GITHUB_OUTPUT
 
           if [[ "${{inputs.override-leap-dev}}" != "" ]]; then
             echo leap-dev-target=${{inputs.override-leap-dev}} >> $GITHUB_OUTPUT
@@ -106,6 +120,12 @@ jobs:
           fi
           if [[ "${{inputs.override-cdt-prerelease}}" == +(true|false) ]]; then
             echo cdt-prerelease=${{inputs.override-cdt-prerelease}} >> $GITHUB_OUTPUT
+          fi
+          if [[ "${{inputs.override-eos-evm-contract}}" != "" ]]; then
+            echo eos-evm-contract-target=${{inputs.override-eos-evm-contract}} >> $GITHUB_OUTPUT
+          fi
+          if [[ "${{inputs.override-eos-evm-contract-prerelease}}" == +(true|false) ]]; then
+            echo eos-evm-contract-prerelease=${{inputs.override-eos-evm-contract-prerelease}} >> $GITHUB_OUTPUT
           fi
 
   build:
@@ -154,6 +174,27 @@ jobs:
         run: |
           apt install -y ./leap-dev*.deb
           rm ./leap-dev*.deb
+
+      - name: Download EOS EVM Contract
+        uses: AntelopeIO/asset-artifact-download-action@v3
+        with:
+          owner: eosnetworkfoundation
+          repo: eos-evm
+          target: '${{needs.versions.outputs.eos-evm-contract-target}}'
+          prereleases: ${{fromJSON(needs.versions.outputs.eos-evm-contract-prerelease)}}
+          file: 'contract.tar.gz'
+          artifact-name: contract.test-actions-off.tar.gz
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract EOS EVM Contract
+        id: evm-contract
+        run: |
+          mkdir contract
+          mv contract.tar.gz contract/
+          cd contract
+          tar xvf contract.tar.gz
+          cd build
+          echo "EVM_CONTRACT=$(pwd)" >> "$GITHUB_OUTPUT"
 
       - name: Build EVM Bridge Contracts
         run: |
