@@ -1504,6 +1504,11 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
         eos_token_contract = _eos_token_contract;
     }
 
+    function setFee(uint256 _egressFee) public {
+        require(msg.sender == linkedEOSAddress, "Bridge: only linked EOS address can set fee");
+        egressFee = _egressFee;
+    }
+
     function eosTokenContract() public view returns (string memory) {
         return eos_token_contract;
     }
@@ -1533,9 +1538,9 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
             require(msg.value == egressFee, "incorrect egress bridge fee");
             // Call bridgeMessage of EVM Runtime
             // using abi.encodePacked: only the last field should be of variable length
-            uint32 app_version = 0x653332e5; // sha("bridgeTransferV0(address,uint,string)")
-            bytes memory n_bytes = abi.encodePacked(app_version, to, amount, memo);
-            (bool success, ) = evmAddress.call{value: msg.value}(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, n_bytes));
+            // sha("bridgeTransferV0(address,uint256,string)") = 0x653332e5
+            bytes memory receiver_msg = abi.encodeWithSignature("bridgeTransferV0(address,uint256,string)", to, amount, memo);
+            (bool success, ) = evmAddress.call{value: msg.value}(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, receiver_msg ));
             if(!success) { revert(); }
 
             _burn(to, amount);
