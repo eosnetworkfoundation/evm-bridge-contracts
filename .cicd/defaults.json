@@ -6,5 +6,9 @@
     "cdt":{
        "target":"4",
        "prerelease":false
+    },
+    "eos-evm-contract":{
+      "target":"main",
+      "prerelease":false
     }
  }
