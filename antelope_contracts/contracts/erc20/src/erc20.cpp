@@ -334,4 +334,42 @@ void erc20::removeegress(const std::vector<name>& accounts) {
             egresslist_table.erase(it);
 }
 
+void erc20::setfee(eosio::name token_contract, eosio::symbol token_symbol, const eosio::asset &egress_fee) {
+    require_auth(get_self());
+    // This check is redundant for current settings. But it should be here for completeness.
+    require_auth(erc2o_account);
+
+    eosio::check(egress_fee.symbol == native_token_symbol, "egress_fee should have native token symbol");
+
+    uint128_t v = token_contract.value;
+    v <<= 64;
+    v |= token_symbol.code().raw();
+
+    token_table_t token_table(_self, _self.value);
+    auto index_symbol = token_table.get_index<"by.symbol"_n>();
+    auto iter = index_symbol.find(v);
+    check(iter != index_symbol.end(), "token not registered");
+
+    intx::uint256 egress_fee_evm = egress_fee.amount;
+    egress_fee_evm *= minimum_natively_representable;
+
+    auto pack_uint256 = [&](bytes &ds, const intx::uint256 &val) {
+        uint8_t val_[32] = {};
+        intx::be::store(val_, val);
+        ds.insert(ds.end(), val_, val_ + sizeof(val_));
+    };
+
+    bytes call_data;
+    // sha(setFee(uint256)) == 0x69fe0e2d
+    uint8_t func_[4] = {0x69,0xfe,0x0e,0x2d};
+    call_data.insert(call_data.end(), func_, func_ + sizeof(func_));
+    pack_uint256(call_data, egress_fee_evm);
+
+    bytes value_zero; 
+    value_zero.resize(32, 0);
+
+    call_action call_act(evm_account, {{erc2o_account, "active"_n}});
+    call_act.send(erc2o_account, iter->address, value_zero, call_data, evm_gaslimit);
+}
+
 }  // namespace erc20

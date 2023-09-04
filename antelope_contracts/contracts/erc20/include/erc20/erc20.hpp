@@ -49,6 +49,7 @@ class [[eosio::contract]] erc20 : public contract {
 
     [[eosio::action]] void addegress(const std::vector<name>& accounts);
     [[eosio::action]] void removeegress(const std::vector<name>& accounts);
+    [[eosio::action]] void setfee(eosio::name token_contract, eosio::symbol token_symbol, const eosio::asset &egress_fee);
 
    uint64_t get_next_nonce();
 
