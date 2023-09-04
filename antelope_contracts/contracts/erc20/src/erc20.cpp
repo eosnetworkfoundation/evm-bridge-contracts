@@ -42,7 +42,7 @@ uint64_t erc20::get_next_nonce() {
     auto itr = table.find(erc2o_account.value);
     uint64_t next_nonce = (itr == table.end() ? 0 : itr->next_nonce);
 
-    assertnonce_action act(evm_account, {{erc2o_account, "active"_n}});
+    assertnonce_action act(evm_account, std::vector<eosio::permission_level>{});
     act.send(erc2o_account, next_nonce);
     return next_nonce;
 }
@@ -206,17 +206,18 @@ void erc20::onbridgemsg(const bridge_message_t &message) {
         check(msg.data.size() >= 4 + 32 /*to*/ + 32 /*amount*/ + 32 /*memo offset*/ + 32 /*memo len*/, 
             "not enough data in bridge_message_v0 of application type 0x653332e5");
 
-        evmc::address dest_addr;
-        memcpy(dest_addr.bytes, (void *)&(msg.data[4 + 32 - kAddressLength]), kAddressLength);
-        std::optional<uint64_t> dest_acc = silkworm::extract_reserved_address(dest_addr);
-        check(!!dest_acc, "destination address in bridge_message_v0 must be reserved address");
-
         auto read_uint256 = [&](const auto &msg, size_t offset) -> intx::uint256 {
             uint8_t buffer[32]={};
             check(msg.data.size() >= offset + 32, "not enough data in bridge_message_v0 of application type 0x653332e5");
             memcpy(buffer, (void *)&(msg.data[offset]), 32);
             return intx::be::load<intx::uint256>(buffer);
         };
+
+        check(read_uint256(msg, 4) <= 0xffffFFFFffffFFFFffffFFFFffffFFFFffffFFFF_u256, "invalid destination address");
+        evmc::address dest_addr;
+        memcpy(dest_addr.bytes, (void *)&(msg.data[4 + 32 - kAddressLength]), kAddressLength);
+        std::optional<uint64_t> dest_acc = silkworm::extract_reserved_address(dest_addr);
+        check(!!dest_acc, "destination address in bridge_message_v0 must be reserved address");
 
         intx::uint256 value = read_uint256(msg, 4 + 32);
         intx::uint256 mult = intx::exp(10_u256, intx::uint256(itr->erc20_precision - itr->ingress_fee.symbol.precision()));
@@ -271,14 +272,14 @@ void erc20::transfer(eosio::name from, eosio::name to, eosio::asset quantity,
     eosio::check(quantity.amount > itr->ingress_fee.amount, "deposit amount must be greater than ingress fee");
 
     uint64_t ingress_fee = itr->ingress_fee.amount;
-    quantity.amount -= ingress_fee;
+    quantity -= itr->ingress_fee;
     eosio::check(quantity.amount > 0 && quantity.amount < (1ll<<62)-1, "deposit amount overflow");
 
     if (memo.size() == 42 && memo[0] == '0' && memo[1] == 'x') {
         handle_erc20_transfer(*itr, quantity, memo);
         token_table.modify(*itr, _self, [&](auto &v) {
-            v.balance.amount += quantity.amount;
-            v.fee_balance.amount += ingress_fee;
+            v.balance += quantity;
+            v.fee_balance += v.ingress_fee; 
         });
     } else
         eosio::check(false, "memo must be 0x EVM address");
