@@ -240,7 +240,7 @@ void erc20::onbridgemsg(const bridge_message_t &message) {
         }
 
         eosio::name dest_eos_acct(*dest_acc);
-        if (get_code_hash(dest_eos_acct) != checksum256()) {
+        if (::erc20::get_code_hash(dest_eos_acct) != checksum256()) {
             egresslist_table_t(get_self(), get_self().value).get(dest_eos_acct.value, "native accounts containing contract code must be on allow list for egress bridging");
         }
 
