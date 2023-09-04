@@ -22,7 +22,9 @@ extern const eosio::chain::name erc20_account;
 using namespace eosio;
 using namespace eosio::chain;
 
-class erc20_tester : public eosio::testing::validating_tester {
+class erc20_tester : public eosio::testing::base_tester {
+
+private:
    public:
     const eosio::chain::symbol native_symbol;
     explicit erc20_tester(std::string native_symbol_str = "4,EOS");
@@ -37,6 +39,21 @@ class erc20_tester : public eosio::testing::validating_tester {
     eosio::chain::asset get_balance(const account_name& act, const account_name& token_addr, const eosio::chain::symbol& target_symbol) {
         std::vector<char> data = get_row_by_account(token_addr, act, "accounts"_n, name(target_symbol.to_symbol_code().value));
         return data.empty() ? eosio::chain::asset(0, target_symbol) : token_abi_ser.binary_to_variant("account", data, eosio::chain::abi_serializer::create_yield_function(abi_serializer_max_time))["balance"].as<eosio::chain::asset>();
+    }
+
+    using base_tester::produce_block;
+
+    signed_block_ptr produce_block( fc::microseconds skip_time = fc::milliseconds(config::block_interval_ms) )override {
+        return _produce_block(skip_time, false);
+    }
+
+    signed_block_ptr produce_empty_block( fc::microseconds skip_time = fc::milliseconds(config::block_interval_ms) )override {
+        unapplied_transactions.add_aborted( control->abort_block() );
+        return _produce_block(skip_time, true);
+    }
+
+    signed_block_ptr finish_block()override {
+        return _finish_block();
     }
 };
 

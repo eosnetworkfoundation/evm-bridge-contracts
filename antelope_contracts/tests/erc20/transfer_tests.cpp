@@ -44,13 +44,55 @@ struct transfer_tester : erc20_tester {
         calldata.insert(calldata.end(), value_buffer, value_buffer + 32);
 
         // Cannot directly send message to erc20
+
+        fc::variants arr;
+        arr.push_back(fc::variant("bridge_message_v0"));
+        arr.push_back(mvo()
+            ("receiver", erc20_account.to_string())
+            ("sender", "4ea3b729669bf6c34f7b80e5d6c17db71f89f21f") // contract addr at nonce 0
+            ("timestamp","2020-01-01T00:00:00.000000")
+            ("value", "0000000000000000000000000000000000000000000000000000000000000000")
+            ("data", 
+            "653332e5" //sha("bridgeTransferV0(address,uint256,string)")
+            "000000000000000000000000bbbbbbbbbbbbbbbbbbbbbbbb3d0e000000000000" // bob- dest account
+            "0000000000000000000000000000000000000000000000000000000000001388" // hex(5000)-ERC-20 val
+            "0000000000000000000000000000000000000000000000000000000000000060" // hex(96)-memo offset
+            "0000000000000000000000000000000000000000000000000000000000000004" // memo len
+            "aabbccdd00000000000000000000000000000000000000000000000000000000" // memo data aligned to 32 bytes
+            ));
+
+        fc::variants arr_hacker_solidity_contract;
+        arr_hacker_solidity_contract.push_back(fc::variant("bridge_message_v0"));
+        arr_hacker_solidity_contract.push_back(mvo()
+            ("receiver", erc20_account.to_string())
+            ("sender", "aaaabbbbccccdddd111122223333444455556666") // hacker's solidity contract
+            ("timestamp","2020-01-01T00:00:00.000000")
+            ("value", "0000000000000000000000000000000000000000000000000000000000000000")
+            ("data", 
+            "653332e5" //sha("bridgeTransferV0(address,uint256,string)")
+            "000000000000000000000000bbbbbbbbbbbbbbbbbbbbbbbb3d0e000000000000" // bob- dest account
+            "0000000000000000000000000000000000000000000000000000000000001388" // hex(5000)-ERC-20 val
+            "0000000000000000000000000000000000000000000000000000000000000060" // hex(96)-memo offset
+            "0000000000000000000000000000000000000000000000000000000000000004" // memo len
+            "aabbccdd00000000000000000000000000000000000000000000000000000000" // memo data aligned to 32 bytes
+            ));
+
+        // hacker can't trigger the bridge from other solidity contract
+        BOOST_REQUIRE_EXCEPTION(
+            push_action(
+            evm_account, "sendbridgemsg"_n, evm_account, mvo()("message", arr_hacker_solidity_contract)),
+            eosio_assert_message_exception, 
+            eosio_assert_message_is("ERC-20 token not registerred"));
+
+        // only evm_runtime can call onbridgemsg
         BOOST_REQUIRE_EXCEPTION(push_action(
-                                    erc20_account, "onbridgemsg"_n, "alice"_n, mvo()("receiver", erc20_account)("sender", bytes())("timestamp", eosio::chain::time_point())("value", bytes())("data", calldata)),
-                                missing_auth_exception, eosio::testing::fc_exception_message_starts_with("missing authority"));
+            erc20_account, "onbridgemsg"_n, "alice"_n, mvo()("message", arr)),
+            eosio_assert_message_exception, 
+            eosio_assert_message_is("invalid sender of onbridgemsg"));
 
         // Go through stub
         push_action(
-            evm_account, "sendbridgemsg"_n, "alice"_n, mvo()("receiver", erc20_account)("sender", bytes())("timestamp", eosio::chain::time_point())("value", bytes())("data", calldata));
+            evm_account, "sendbridgemsg"_n, evm_account, mvo()("message", arr));
     }
 };
 
@@ -79,7 +121,7 @@ try {
     BOOST_REQUIRE(trace->action_traces.back().act.name.to_string() == "call");
 
     BOOST_REQUIRE_EXCEPTION(transfer_token(eos_token_account, "alice"_n, erc20_account, make_asset(10000), "0x0000000000000000000000000000000000000000"),
-                            eosio_assert_message_exception, eosio_assert_message_is("received unexpected token"));
+                            eosio_assert_message_exception, eosio_assert_message_is("received unregistered token"));
 
     produce_block();
 }
@@ -103,7 +145,7 @@ try {
     const char bob[] = "0xbbbbbbbbbbbbbbbbbbbbbbbb3d0e000000000000";
 
     // EVM has precision of 6
-    // 5000 /1000000 = 0.005 EOS = 50
+    // 5000 /1000000 = 0.005 USDT = 50
     gen_bridgemessage(bob, 5000);
 
     BOOST_REQUIRE(10000 - 50 == get_balance(erc20_account, token_account, symbol::from_string("4,USDT")).get_amount());

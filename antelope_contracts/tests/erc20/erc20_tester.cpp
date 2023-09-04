@@ -18,6 +18,7 @@ using mvo = fc::mutable_variant_object;
 
 using intx::operator""_u256;
 namespace erc20_test {
+const eosio::chain::name eos_system_account("eosio");
 const eosio::chain::name eos_token_account("eosio.token");
 const eosio::chain::symbol eos_token_symbol(4u, "EOS");
 const eosio::chain::name token_account("tethertether");
@@ -27,8 +28,28 @@ const eosio::chain::name faucet_account_name("eosio.faucet");
 const eosio::chain::name erc20_account("eosio.erc2o");
 
 erc20_tester::erc20_tester(std::string native_symbol_str) : native_symbol(symbol::from_string(native_symbol_str)) {
-    create_accounts({eos_token_account, evm_account, token_account, faucet_account_name, erc20_account});
+
+    auto def_conf = default_config(tempdir);
+    def_conf.first.max_nonprivileged_inline_action_size = 256 * 1024;
+    cfg = def_conf.first;
+    init(def_conf.first, def_conf.second);
+
+    const auto& pfm = control->get_protocol_feature_manager();
+
+    auto preactivate_feature_digest = pfm.get_builtin_digest(builtin_protocol_feature_t::preactivate_feature);
+         FC_ASSERT( preactivate_feature_digest, "PREACTIVATE_FEATURE not found" );
+         schedule_protocol_features_wo_preactivation( { *preactivate_feature_digest } );
+
     produce_block();
+
+    set_code( "eosio"_n, testing::contracts::eosio_boot_wasm() );
+    set_abi( "eosio"_n, testing::contracts::eosio_boot_abi().data() );
+
+    preactivate_all_builtin_protocol_features();
+
+    produce_block();
+
+    create_accounts({eos_token_account, evm_account, token_account, faucet_account_name, erc20_account});
 
     set_code(eos_token_account, testing::contracts::eosio_token_wasm());
     set_abi(eos_token_account, testing::contracts::eosio_token_abi().data());
@@ -63,12 +84,11 @@ erc20_tester::erc20_tester(std::string native_symbol_str) : native_symbol(symbol
     produce_block();
 
     // ./cleos push action eosio.erc2o init '[0]' -p eosio.erc2o
-    push_action(erc20_account, "init"_n, erc20_account, mvo()("nonce", 0));
+    push_action(erc20_account, "upgrade"_n, erc20_account, mvo());
 
     produce_block();
 
-    // ./cleos push action eosio.erc2o regtoken '[1,"usdt","EVM USDT Token","WUSDT","0.1000 USDT","0.0100 USDT","4ea3b729669bf6c34f7b80e5d6c17db71f89f21f",6]' -p eosio.erc2o
-    push_action(erc20_account, "regtoken"_n, erc20_account, mvo()("nonce", 1)("eos_contract_name",token_account.to_string())("evm_token_name","EVM USDT V1")("evm_token_symbol","WUSDT")("min_deposit","0.1000 USDT")("deposit_fee","0.0100 USDT")("erc20_impl_address","4ea3b729669bf6c34f7b80e5d6c17db71f89f21f")("erc20_precision",6));
+    push_action(erc20_account, "regtoken"_n, erc20_account, mvo()("eos_contract_name",token_account.to_string())("evm_token_name","EVM USDT V1")("evm_token_symbol","WUSDT")("ingress_fee","0.0100 USDT")("egress_fee","0.0100 EOS")("erc20_precision",6));
 
     produce_block();
 
