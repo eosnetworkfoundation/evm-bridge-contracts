@@ -271,7 +271,6 @@ void erc20::transfer(eosio::name from, eosio::name to, eosio::asset quantity,
     eosio::check(itr != index.end() && itr->ingress_fee.symbol == quantity.symbol, "received unregistered token");
     eosio::check(quantity.amount > itr->ingress_fee.amount, "deposit amount must be greater than ingress fee");
 
-    uint64_t ingress_fee = itr->ingress_fee.amount;
     quantity -= itr->ingress_fee;
     eosio::check(quantity.amount > 0 && quantity.amount < (1ll<<62)-1, "deposit amount overflow");
 

@@ -78,7 +78,7 @@ class [[eosio::contract]] erc20 : public contract {
       eosio::asset   ingress_fee;
       eosio::asset   balance; // <-- total amount in EVM side
       eosio::asset   fee_balance;
-      int8_t         erc20_precision = 0;
+      uint8_t        erc20_precision = 0;
 
       uint64_t primary_key() const {
          return id;
