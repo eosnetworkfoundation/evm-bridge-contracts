@@ -99,8 +99,6 @@ struct transfer_tester : erc20_tester {
 BOOST_AUTO_TEST_SUITE(erc20_tests)
 BOOST_FIXTURE_TEST_CASE(eos_side_transfer, transfer_tester)
 try {
-    BOOST_REQUIRE(1 == 1);
-
     auto usdt_symbol = symbol::from_string("4,USDT");
 
     transfer_token(token_account, faucet_account_name, "alice"_n, make_asset(10000'0000, usdt_symbol));
@@ -129,8 +127,6 @@ FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(evm_side_transfer, transfer_tester)
 try {
-    BOOST_REQUIRE(1 == 1);
-
     auto usdt_symbol = symbol::from_string("4,USDT");
 
     transfer_token(token_account, faucet_account_name, "alice"_n, make_asset(10000'0000, usdt_symbol));
@@ -154,19 +150,25 @@ try {
 }
 FC_LOG_AND_RETHROW()
 
-BOOST_FIXTURE_TEST_CASE(set_fee, transfer_tester)
+BOOST_FIXTURE_TEST_CASE(set_egress_fee, transfer_tester)
 try {
-    BOOST_REQUIRE(1 == 1);
-    auto trace = push_action(evmtok_account, "setfee"_n, evmtok_account, 
-        mvo()("token_contract", token_account)("token_symbol", symbol::from_string("4,USDT"))("egress_fee", make_asset(1)));
+
+    BOOST_REQUIRE_EXCEPTION(push_action(evmtok_account, "setegressfee"_n, evmtok_account, 
+        mvo()("token_contract", token_account)("token_symbol", symbol::from_string("4,USDT"))("egress_fee", make_asset(50))),
+        eosio_assert_message_exception, eosio_assert_message_is("egress fee to be set must be larger than minimum fee"));
+
+    produce_block();
+
+    auto trace = push_action(evmtok_account, "setegressfee"_n, evmtok_account, 
+        mvo()("token_contract", token_account)("token_symbol", symbol::from_string("4,USDT"))("egress_fee", make_asset(5000)));
     BOOST_REQUIRE(trace->action_traces.back().receiver == evm_account);
     BOOST_REQUIRE(trace->action_traces.back().act.account == evm_account);
     BOOST_REQUIRE(trace->action_traces.back().act.name.to_string() == "call");
 
     produce_block();
-
-    BOOST_REQUIRE_EXCEPTION(push_action(evmtok_account, "setfee"_n, evm_account, 
-        mvo()("token_contract", token_account)("token_symbol", symbol::from_string("4,USDT"))("egress_fee", make_asset(2))),
+   
+    BOOST_REQUIRE_EXCEPTION(push_action(evmtok_account, "setegressfee"_n, evm_account, 
+        mvo()("token_contract", token_account)("token_symbol", symbol::from_string("4,USDT"))("egress_fee", make_asset(1000))),
         missing_auth_exception, eosio::testing::fc_exception_message_starts_with("missing authority of eosio.evmtok"));
 
 
@@ -180,11 +182,11 @@ try {
 
     produce_block();
 
-    BOOST_REQUIRE_EXCEPTION(push_action(evmtok_account, "setfee"_n, evmtok_account, 
-        mvo()("token_contract", token_account)("token_symbol", symbol::from_string("4,USDT"))("egress_fee", make_asset(3))),
+    BOOST_REQUIRE_EXCEPTION(push_action(evmtok_account, "setegressfee"_n, evmtok_account, 
+        mvo()("token_contract", token_account)("token_symbol", symbol::from_string("4,USDT"))("egress_fee", make_asset(2000))),
         unsatisfied_authorization, eosio::testing::fc_exception_message_contains("eosio.erc2o"));
 
-    
+    produce_block();
 }
 FC_LOG_AND_RETHROW()
 

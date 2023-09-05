@@ -334,7 +334,7 @@ void erc20::removeegress(const std::vector<name>& accounts) {
             egresslist_table.erase(it);
 }
 
-void erc20::setfee(eosio::name token_contract, eosio::symbol token_symbol, const eosio::asset &egress_fee) {
+void erc20::setegressfee(eosio::name token_contract, eosio::symbol token_symbol, const eosio::asset &egress_fee) {
     require_auth(get_self());
 
     eosio::check(egress_fee.symbol == native_token_symbol, "egress_fee should have native token symbol");
@@ -345,10 +345,17 @@ void erc20::setfee(eosio::name token_contract, eosio::symbol token_symbol, const
 
     token_table_t token_table(_self, _self.value);
     auto index_symbol = token_table.get_index<"by.symbol"_n>();
-    auto iter = index_symbol.find(v);
-    check(iter != index_symbol.end(), "token not registered");
+    auto token_table_iter = index_symbol.find(v);
+    eosio::check(token_table_iter != index_symbol.end(), "token not registered");
 
+    message_receiver_table message_receivers(evm_account, evm_account.value);
+    auto message_receivers_iter = message_receivers.find(erc2o_account.value);
+    eosio::check(message_receivers_iter != message_receivers.end(), "receiver not registered in evm contract");
+
+    intx::uint256 min_fee((uint64_t)message_receivers_iter->min_fee.amount);
     intx::uint256 egress_fee_evm = egress_fee.amount;
+    eosio::check(egress_fee_evm >= min_fee, "egress fee to be set must be larger than minimum fee");
+
     egress_fee_evm *= minimum_natively_representable;
 
     auto pack_uint256 = [&](bytes &ds, const intx::uint256 &val) {
@@ -367,7 +374,7 @@ void erc20::setfee(eosio::name token_contract, eosio::symbol token_symbol, const
     value_zero.resize(32, 0);
 
     call_action call_act(evm_account, {{erc2o_account, "active"_n}});
-    call_act.send(erc2o_account, iter->address, value_zero, call_data, evm_gaslimit);
+    call_act.send(erc2o_account, token_table_iter->address, value_zero, call_data, evm_gaslimit);
 }
 
 }  // namespace erc20

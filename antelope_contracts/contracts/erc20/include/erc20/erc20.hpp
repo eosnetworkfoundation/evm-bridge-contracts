@@ -49,7 +49,7 @@ class [[eosio::contract]] erc20 : public contract {
 
     [[eosio::action]] void addegress(const std::vector<name>& accounts);
     [[eosio::action]] void removeegress(const std::vector<name>& accounts);
-    [[eosio::action]] void setfee(eosio::name token_contract, eosio::symbol token_symbol, const eosio::asset &egress_fee);
+    [[eosio::action]] void setegressfee(eosio::name token_contract, eosio::symbol token_symbol, const eosio::asset &egress_fee);
 
    uint64_t get_next_nonce();
 
@@ -117,6 +117,29 @@ class [[eosio::contract]] erc20 : public contract {
 
     void assertnonce(eosio::name account, uint64_t next_nonce);
     using assertnonce_action = action_wrapper<"assertnonce"_n, &erc20::assertnonce>;
+
+
+   struct  message_receiver {
+
+      enum flag : uint32_t {
+         FORCE_ATOMIC = 0x1
+      };
+
+      eosio::name     account;
+      eosio::name     handler;
+      eosio::asset    min_fee;
+      uint32_t flags;
+
+      uint64_t primary_key() const { return account.value; }
+      bool has_flag(flag f) const {
+         return (flags & f) != 0;
+      }
+
+      EOSLIB_SERIALIZE(message_receiver, (account)(handler)(min_fee)(flags));
+   };
+
+typedef eosio::multi_index<"msgreceiver"_n, message_receiver> message_receiver_table;
+
 
 };
 

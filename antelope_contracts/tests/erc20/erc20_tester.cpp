@@ -104,6 +104,14 @@ erc20_tester::erc20_tester(std::string native_symbol_str) : native_symbol(symbol
     set_abi(evm_account, testing::contracts::evm_stub_abi().data());
 
     produce_block();
+
+    push_action(evm_account,
+                "init"_n,
+                evm_account,
+                mvo());
+
+
+    produce_block();
     auto abi = fc::json::from_string(testing::contracts::eosio_token_abi().data()).template as<abi_def>();
     token_abi_ser.set_abi(std::move(abi), abi_serializer::create_yield_function(abi_serializer_max_time));
 }
