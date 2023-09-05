@@ -20,6 +20,10 @@ namespace eosio {
 namespace testing {
 
 struct contracts {
+
+    static std::vector<uint8_t> eosio_boot_wasm() { return read_wasm("${ANTELOPE_CONTRACTS_SOURCE_DIR}/eosio.boot/eosio.boot.wasm"); }
+    static std::vector<char> eosio_boot_abi() { return read_abi("${ANTELOPE_CONTRACTS_SOURCE_DIR}/eosio.boot/eosio.boot.abi"); }
+
     static std::vector<uint8_t> eosio_token_wasm() { return read_wasm("${ANTELOPE_CONTRACTS_SOURCE_DIR}/eosio.token/eosio.token.wasm"); }
     static std::vector<char> eosio_token_abi() { return read_abi("${ANTELOPE_CONTRACTS_SOURCE_DIR}/eosio.token/eosio.token.abi"); }
 

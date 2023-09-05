@@ -1004,7 +1004,7 @@ interface IERC20Upgradeable {
      *
      * Emits a {Transfer} event.
      */
-    function bridgeTransfer(address to, uint256 amount, string memory memo) external returns (bool);
+    function bridgeTransfer(address to, uint256 amount, string memory memo) external payable returns (bool);
 
     /**
      * @dev Returns the remaining number of tokens that `spender` will be
@@ -1206,7 +1206,7 @@ contract ERC20Upgradeable is Initializable, ContextUpgradeable, IERC20Upgradeabl
      * - `to` must be reserved address.
      * - the caller must have a balance of at least `amount`.
      */
-    function bridgeTransfer(address to, uint256 amount, string memory memo) public virtual override returns (bool) {
+    function bridgeTransfer(address to, uint256 amount, string memory memo) public virtual override payable returns (bool) {
         address owner = _msgSender();
         _transfer(owner, to, amount, memo);
         return true;
@@ -1481,21 +1481,36 @@ contract ERC20Upgradeable is Initializable, ContextUpgradeable, IERC20Upgradeabl
 pragma solidity ^0.8.18;
 
 
-
 contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
-     string public linkedEOSAccountName;
+     string  eos_token_contract;
+     string  public linkedEOSAccountName;
      address public linkedEOSAddress;
      address public evmAddress;
+     uint8   public precision;
      uint256 public egressFee;
-     function initialize() initializer public {
-        __ERC20_init("Bridged USDT", "USDT");
+     function initialize(uint8   _precision,
+                         uint256 _egressFee,
+                         string memory _name, 
+                         string memory _symbol,
+                         string memory _eos_token_contract
+                          ) initializer public {
+        __ERC20_init(_name, _symbol);
         __UUPSUpgradeable_init();
         evmAddress = 0xbBBBbBbbbBBBBbbbbbbBBbBB5530EA015b900000;
         linkedEOSAddress = 0xbbBbbbBbbBBbBBbBBBbbbBbB5530eA015740a800;
         linkedEOSAccountName = "eosio.erc2o";
-        egressFee = 0.1e18;
+        precision = _precision;
+        egressFee = _egressFee;
+        eos_token_contract = _eos_token_contract;
+    }
 
-        _mint(msg.sender, 1000000000000);
+    function setFee(uint256 _egressFee) public {
+        require(msg.sender == linkedEOSAddress, "Bridge: only linked EOS address can set fee");
+        egressFee = _egressFee;
+    }
+
+    function eosTokenContract() public view returns (string memory) {
+        return eos_token_contract;
     }
 
     function _authorizeUpgrade(address) internal virtual override {
@@ -1520,11 +1535,11 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
         // ignore mint and burn
         if (from == address(0) || to == address(0)) return;
         if (_isReservedAddress(to)) {
-            require(msg.value >= egressFee, "Bridge: no enough bridge fee");
-
+            require(msg.value == egressFee, "incorrect egress bridge fee");
             // Call bridgeMessage of EVM Runtime
-            bytes memory n_bytes = abi.encodePacked(to, amount, memo);
-            (bool success, ) = evmAddress.call{value: msg.value}(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, n_bytes));
+            // sha("bridgeTransferV0(address,uint256,string)") = 0x653332e5
+            bytes memory receiver_msg = abi.encodeWithSignature("bridgeTransferV0(address,uint256,string)", to, amount, memo);
+            (bool success, ) = evmAddress.call{value: msg.value}(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, receiver_msg ));
             if(!success) { revert(); }
 
             _burn(to, amount);
@@ -1538,6 +1553,6 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
     }
 
     function decimals() public view virtual override returns (uint8) {
-        return 6;
+        return precision;
     }
 }

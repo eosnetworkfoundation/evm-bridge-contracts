@@ -8,84 +8,283 @@
 #include <silkworm/core/execution/address.hpp>
 #include <silkworm/core/common/util.hpp>
 
+namespace eosio {
+   namespace internal_use_do_not_use {
+      extern "C" {
+         __attribute__((eosio_wasm_import))
+         uint32_t get_code_hash(uint64_t account, uint32_t struct_version, char* data, uint32_t size);
+      }
+   }
+}
+
 namespace erc20 {
+
+checksum256 get_code_hash(name account) {
+    char buff[64];
+
+    eosio::check(internal_use_do_not_use::get_code_hash(account.value, 0, buff, sizeof(buff)) <= sizeof(buff), "get_code_hash() too big");
+    using start_of_code_hash_return = std::tuple<unsigned_int, uint64_t, checksum256>;
+    const auto& [v, s, code_hash] = unpack<start_of_code_hash_return>(buff, sizeof(buff));
+
+    return code_hash;
+}
 
 template <size_t Size>
 void initialize_data(bytes& output, const unsigned char (&arr)[Size]) {
+    static_assert(Size > 128); // ensure bytecode is compiled
     output.resize(Size);
     std::memcpy(output.data(), arr, Size);
 }
 
-void erc20::init() {
+// lookup nonce from the multi_index table of evm contract and assert
+uint64_t erc20::get_next_nonce() { 
+    eosio::multi_index<"nextnonces"_n, nextnonce> table(evm_account, evm_account.value);
+    auto itr = table.find(erc2o_account.value);
+    uint64_t next_nonce = (itr == table.end() ? 0 : itr->next_nonce);
+
+    assertnonce_action act(evm_account, std::vector<eosio::permission_level>{});
+    act.send(erc2o_account, next_nonce);
+    return next_nonce;
+}
+
+void erc20::upgrade() {
     require_auth(get_self());
+
+    uint64_t id = 0;
+    impl_contract_table_t contract_table(_self, _self.value);
+    check(contract_table.find(id) == contract_table.end(), "implementation contract already deployed");
 
     bytes call_data;
 
-    auto reserved_addr = silkworm::make_reserved_address(get_self().value);
+    auto reserved_addr = silkworm::make_reserved_address(erc2o_account.value);
     initialize_data(call_data, solidity::erc20::bytecode);
+
     bytes to = {};
-    // Assume account opened in evm_runtime
-    call_action call_act(evm_account, {{get_self(), "active"_n}});
-    call_act.send(get_self(), to, 0, call_data, evm_init_gaslimit);
+    bytes value_zero; 
+    value_zero.resize(32, 0);
 
-    // Assume nonce...
-    auto deploy_addr = silkworm::create_address(reserved_addr, 0); 
+    uint64_t next_nonce = get_next_nonce();
 
-    initialize_data(call_data, solidity::proxy::bytecode);
-    call_data.insert(call_data.end(), 32 - kAddressLength, 0);  // padding for address
-    call_data.insert(call_data.end(), deploy_addr.bytes, deploy_addr.bytes + kAddressLength);
-    // Assume account opened in evm_runtime
-    call_act.send(get_self(), to, 0, call_data, evm_init_gaslimit);
+    // required account opened in evm_runtime
+    call_action call_act(evm_account, {{erc2o_account, "active"_n}});
+    call_act.send(erc2o_account, to, value_zero, call_data, evm_init_gaslimit);
 
-    // Assume nonce...
-    deploy_addr = silkworm::create_address(reserved_addr, 1); 
+    evmc::address impl_addr = silkworm::create_address(reserved_addr, next_nonce); 
 
-    // TODO: Where can we get the addr...
-    config new_config = {
-        .erc20_addr = {},
-    };
-
-    new_config.erc20_addr.resize(kAddressLength);
-    memcpy(new_config.erc20_addr.data(), deploy_addr.bytes, kAddressLength);
-
-    _config.set(new_config, get_self());
+    contract_table.emplace(_self, [&](auto &v) {
+        v.id = id;
+        v.address.resize(kAddressLength);
+        memcpy(&(v.address[0]), impl_addr.bytes, kAddressLength);
+    });
 }
 
-void erc20::onbridgemsg(name receiver, const bytes& sender, const time_point& timestamp, const bytes& value, const bytes& data) {
-    require_auth(evm_account);
+[[eosio::action]] void erc20::regtoken(eosio::name token_contract, std::string evm_token_name, std::string evm_token_symbol, const eosio::asset& ingress_fee, const eosio::asset &egress_fee, uint8_t erc20_precision) {
+    require_auth(get_self());
 
-    // TODO: this API will change
+    eosio::check(eosio::is_account(token_contract), "invalid token_contract");
+    
+    // keep the name & symbol fit into 32 byte, which is the alignment in EVM
+    eosio::check(evm_token_name.length() > 0 && evm_token_name.length() < 32, "invalid evm_token_name length");
+    eosio::check(evm_token_symbol.length() > 0 && evm_token_symbol.length() < 32, "invalid evm_token_symbol length");
 
-    check(data.size() == kAddressLength + 32 , "invalid data size");
-    // TODO: verify from, decode data
-    intx::uint256 amount = intx::be::unsafe::load<intx::uint256>((const uint8_t*)data.data() + kAddressLength);
-    evmc::address dest = {};
-    memcpy(dest.bytes, data.data(), kAddressLength);
-    auto to = silkworm::extract_reserved_address(dest);
+    // 2^(256-64) = 6.2e+57, so the precision diff is at most 57
+    eosio::check(erc20_precision >= ingress_fee.symbol.precision() &&
+    erc20_precision <= ingress_fee.symbol.precision() + 57, "erc20 precision out of range");
 
-    check(!!to , "failed to extract destination address");
+    eosio::check(egress_fee.symbol == native_token_symbol, "egress_fee should have native token symbol");
+    intx::uint256 egress_fee_evm = egress_fee.amount;
+    egress_fee_evm *= minimum_natively_representable;
 
-    eosio::check(amount % minimum_natively_representable == 0_u256, "transfer must not generate dust");
+    uint128_t v = token_contract.value;
+    v <<= 64;
+    v |= ingress_fee.symbol.code().raw();
+    token_table_t token_table(_self, _self.value);
+    auto index_symbol = token_table.get_index<"by.symbol"_n>();
+    check(index_symbol.find(v) == index_symbol.end(), "token already registered");
 
-    eosio::token::transfer_action transfer_act(token_account, {{get_self(), "active"_n}});
-    transfer_act.send(get_self(), *to, eosio::asset((uint64_t)(amount / minimum_natively_representable), token_symbol), std::string("Transfer from EVM"));
+    impl_contract_table_t contract_table(_self, _self.value);
+    eosio::check(contract_table.begin() != contract_table.end(), "no implementaion contract available");
+    auto contract_itr = contract_table.end();
+    --contract_itr;
+
+    auto reserved_addr = silkworm::make_reserved_address(erc2o_account.value);
+
+    bytes call_data;
+    initialize_data(call_data, solidity::proxy::bytecode);
+
+    // constructor(address erc20_impl_contract, memory _data)
+    call_data.insert(call_data.end(), 32 - kAddressLength, 0);  // padding for address
+    call_data.insert(call_data.end(), contract_itr->address.begin(), contract_itr->address.end());
+
+    bytes constructor_data;
+    // sha(function initialize(uint8 _precision,uint256 _egressFee,string memory _name,string memory _symbol,string memory _eos_token_contract)) == 0xd66d4ac3
+    uint8_t func_[4] = {0xd6,0x6d,0x4a,0xc3};
+    constructor_data.insert(constructor_data.end(), func_, func_ + sizeof(func_));
+
+    auto pack_uint256 = [&](bytes &ds, const intx::uint256 &val) {
+        uint8_t val_[32] = {};
+        intx::be::store(val_, val);
+        ds.insert(ds.end(), val_, val_ + sizeof(val_));
+    };
+    auto pack_uint32 = [&](bytes &ds, uint32_t val) {
+        uint8_t val_[32] = {};
+        val_[28] = (uint8_t)(val >> 24);
+        val_[29] = (uint8_t)(val >> 16);
+        val_[30] = (uint8_t)(val >> 8);
+        val_[31] = (uint8_t)val;
+        ds.insert(ds.end(), val_, val_ + sizeof(val_));
+    };
+    auto pack_string = [&](bytes &ds, const auto &str) {
+        pack_uint32(ds, (uint32_t)str.size());
+        for (size_t i = 0; i < (str.size() + 31) / 32 * 32; i += 32) {
+            uint8_t name_[32] = {};
+            memcpy(name_, str.data() + i, i + 32 > str.size() ? str.size() - i : 32);
+            ds.insert(ds.end(), name_, name_ + sizeof(name_));
+        }
+    };
+
+    pack_uint32(constructor_data, (uint8_t)erc20_precision); // offset 0
+    pack_uint256(constructor_data, egress_fee_evm);          // offset 32
+    pack_uint32(constructor_data, 160);                      // offset 64
+    pack_uint32(constructor_data, 224);                      // offset 96
+    pack_uint32(constructor_data, 288);                      // offset 128
+    pack_string(constructor_data, evm_token_name);           // offset 160
+    pack_string(constructor_data, evm_token_symbol);         // offset 224
+    pack_string(constructor_data, token_contract.to_string()); // offset 288
+
+    pack_uint32(call_data, 64);                  // offset 32
+    pack_string(call_data, constructor_data);    // offset 64
+
+    bytes to = {};
+    bytes value_zero; 
+    value_zero.resize(32, 0);
+
+    uint64_t next_nonce = get_next_nonce();
+
+     // required account opened in evm_runtime
+    call_action call_act(evm_account, {{erc2o_account, "active"_n}});
+    call_act.send(erc2o_account, to, value_zero, call_data, evm_init_gaslimit);
+
+    evmc::address proxy_contract_addr = silkworm::create_address(reserved_addr, next_nonce); 
+
+    token_table.emplace(_self, [&](auto &v) {
+        v.id = token_table.available_primary_key();
+        v.token_contract = token_contract;
+        v.address.resize(kAddressLength, 0);
+        memcpy(&(v.address[0]), proxy_contract_addr.bytes, kAddressLength);
+        v.ingress_fee = ingress_fee;
+        v.balance = ingress_fee;
+        v.balance.amount = 0;
+        v.fee_balance = v.balance;
+        v.erc20_precision = erc20_precision;
+    });
+}
+
+void erc20::onbridgemsg(const bridge_message_t &message) {
+
+    check(get_sender() == evm_account, "invalid sender of onbridgemsg");
+
+    const bridge_message_v0 &msg = std::get<bridge_message_v0>(message);
+    check(msg.receiver == erc2o_account, "invalid message receiver");
+
+    checksum256 addr_key = make_key(msg.sender);
+
+    token_table_t token_table(_self, _self.value);
+    auto index = token_table.get_index<"by.address"_n>();
+    auto itr = index.find(addr_key);
+
+    check(itr != index.end() && itr->address == msg.sender, "ERC-20 token not registerred");
+
+    check(msg.data.size() >= 4, "not enough data in bridge_message_v0");
+
+    uint32_t app_type = 0;
+    memcpy((void *)&app_type, (const void *)&(msg.data[0]), sizeof(app_type));
+
+    if (app_type == 0xe5323365 /* big-endian 0x653332e5 */) {
+        // abi.encodeWithSignature("bridgeTransferV0(address,uint,string)", to, amount, memo);
+        // sha("bridgeTransferV0(address,uint,string)") = 0x653332e5
+        check(msg.data.size() >= 4 + 32 /*to*/ + 32 /*amount*/ + 32 /*memo offset*/ + 32 /*memo len*/, 
+            "not enough data in bridge_message_v0 of application type 0x653332e5");
+
+        auto read_uint256 = [&](const auto &msg, size_t offset) -> intx::uint256 {
+            uint8_t buffer[32]={};
+            check(msg.data.size() >= offset + 32, "not enough data in bridge_message_v0 of application type 0x653332e5");
+            memcpy(buffer, (void *)&(msg.data[offset]), 32);
+            return intx::be::load<intx::uint256>(buffer);
+        };
+
+        check(read_uint256(msg, 4) <= 0xffffFFFFffffFFFFffffFFFFffffFFFFffffFFFF_u256, "invalid destination address");
+        evmc::address dest_addr;
+        memcpy(dest_addr.bytes, (void *)&(msg.data[4 + 32 - kAddressLength]), kAddressLength);
+        std::optional<uint64_t> dest_acc = silkworm::extract_reserved_address(dest_addr);
+        check(!!dest_acc, "destination address in bridge_message_v0 must be reserved address");
+
+        intx::uint256 value = read_uint256(msg, 4 + 32);
+        intx::uint256 mult = intx::exp(10_u256, intx::uint256(itr->erc20_precision - itr->ingress_fee.symbol.precision()));
+        check(value % mult == 0_u256, "bridge amount can not have dust");
+        value /= mult;
+
+        uint64_t dest_amount = (uint64_t)value;
+        check(intx::uint256(dest_amount) == value && dest_amount < (1ull<<62)-1, "bridge amount value overflow");
+        check(dest_amount > 0, "bridge amount must be positive");
+
+        check(read_uint256(msg, 4 + 32 + 32) == 96_u256, "invalid memo offset in bridge_message_v0");
+
+        intx::uint256 memo_len_ = read_uint256(msg, 4 + 32 + 32 + 32);
+        size_t memo_len = (uint64_t)(memo_len_);
+        check(memo_len_ <= 256_u256 && msg.data.size() >= 4 + 32 + 32 + 32 + 32 + memo_len, 
+            "invalid memo length in bridge_message_v0");
+        std::string memo;
+        if (memo_len > 0) {
+            memo.assign((const char *)&(msg.data[4 + 32 + 32 + 32 + 32]), memo_len);
+        }
+
+        eosio::name dest_eos_acct(*dest_acc);
+        if (::erc20::get_code_hash(dest_eos_acct) != checksum256()) {
+            egresslist_table_t(get_self(), get_self().value).get(dest_eos_acct.value, "native accounts containing contract code must be on allow list for egress bridging");
+        }
+
+        eosio::token::transfer_action transfer_act(itr->token_contract, {{get_self(), "active"_n}});
+        transfer_act.send(get_self(), dest_eos_acct, eosio::asset(dest_amount, itr->ingress_fee.symbol), memo);
+
+        token_table.modify(*itr, _self, [&](auto &v) {
+            v.balance.amount -= dest_amount;
+        });
+    } else {
+        eosio::check(false, "unsupported bridge_message version");
+    }
 }
 
 void erc20::transfer(eosio::name from, eosio::name to, eosio::asset quantity,
                      std::string memo) {
-    eosio::check(get_first_receiver() == token_account && quantity.symbol == token_symbol,
-                 "received unexpected token");
 
     if (to != get_self() || from == get_self()) return;
 
-    if (memo.size() == 42 && memo[0] == '0' && memo[1] == 'x')
-        handle_evm_transfer(quantity, memo);
-    else
+    uint128_t v = get_first_receiver().value;
+    v <<= 64;
+    v |= quantity.symbol.code().raw();
+
+    token_table_t token_table(_self, _self.value);
+    auto index = token_table.get_index<"by.symbol"_n>();
+    auto itr = index.find(v);
+
+    eosio::check(itr != index.end() && itr->ingress_fee.symbol == quantity.symbol, "received unregistered token");
+    eosio::check(quantity.amount > itr->ingress_fee.amount, "deposit amount must be greater than ingress fee");
+
+    quantity -= itr->ingress_fee;
+    eosio::check(quantity.amount > 0 && quantity.amount < (1ll<<62)-1, "deposit amount overflow");
+
+    if (memo.size() == 42 && memo[0] == '0' && memo[1] == 'x') {
+        handle_erc20_transfer(*itr, quantity, memo);
+        token_table.modify(*itr, _self, [&](auto &v) {
+            v.balance += quantity;
+            v.fee_balance += v.ingress_fee; 
+        });
+    } else
         eosio::check(false, "memo must be 0x EVM address");
-    
 }
 
-void erc20::handle_evm_transfer(eosio::asset quantity, const std::string& memo) {
+void erc20::handle_erc20_transfer(const token_t &token, eosio::asset quantity, const std::string& memo) {
     const char method[4] = {'\xa9', '\x05', '\x9c', '\xbb'};  // sha3(transfer(address,uint256))[:4]
 
     auto address_bytes = from_hex(memo);
@@ -93,7 +292,7 @@ void erc20::handle_evm_transfer(eosio::asset quantity, const std::string& memo) 
     eosio::check(address_bytes->size() == kAddressLength, "memo must be valid 0x EVM address");
 
     intx::uint256 value((uint64_t)quantity.amount);
-    value *= minimum_natively_representable;
+    value *= intx::exp(10_u256, intx::uint256(token.erc20_precision - quantity.symbol.precision()));
 
     uint8_t value_buffer[32] = {};
     intx::be::store(value_buffer, value);
@@ -105,8 +304,34 @@ void erc20::handle_evm_transfer(eosio::asset quantity, const std::string& memo) 
     call_data.insert(call_data.end(), address_bytes->begin(), address_bytes->end());
     call_data.insert(call_data.end(), value_buffer, value_buffer + 32);
 
-    call_action call_act(evm_account, {{get_self(), "active"_n}});
-    call_act.send(get_self(), *address_bytes, 0, call_data, evm_gaslimit);
+    call_action call_act(evm_account, {{erc2o_account, "active"_n}});
+
+    bytes value_zero; // value of EVM native token (aka EOS)
+    value_zero.resize(32, 0);
+
+    call_act.send(erc2o_account /*from*/, token.address /*to*/, value_zero /*value*/, call_data /*data*/, evm_gaslimit /*gas_limit*/);
+}
+
+void erc20::addegress(const std::vector<name>& accounts) {
+    require_auth(get_self());
+
+    egresslist_table_t egresslist_table(get_self(), get_self().value);
+
+    for(const name& account : accounts)
+        if(egresslist_table.find(account.value) == egresslist_table.end())
+            egresslist_table.emplace(get_self(), [&](allowed_egress_account& a) {
+                a.account = account;
+            });
+}
+
+void erc20::removeegress(const std::vector<name>& accounts) {
+    require_auth(get_self());
+
+    egresslist_table_t egresslist_table(get_self(), get_self().value);
+
+    for(const name& account : accounts)
+        if(auto it = egresslist_table.find(account.value); it != egresslist_table.end())
+            egresslist_table.erase(it);
 }
 
 }  // namespace erc20
