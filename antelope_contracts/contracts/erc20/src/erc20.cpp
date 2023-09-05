@@ -336,8 +336,6 @@ void erc20::removeegress(const std::vector<name>& accounts) {
 
 void erc20::setfee(eosio::name token_contract, eosio::symbol token_symbol, const eosio::asset &egress_fee) {
     require_auth(get_self());
-    // This check is redundant for current settings. But it should be here for completeness.
-    require_auth(erc2o_account);
 
     eosio::check(egress_fee.symbol == native_token_symbol, "egress_fee should have native token symbol");
 

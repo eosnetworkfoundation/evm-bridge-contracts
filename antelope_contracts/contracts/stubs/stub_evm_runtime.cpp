@@ -33,10 +33,11 @@ class [[eosio::contract]] stub_evm_runtime : public contract {
 };
 
 void stub_evm_runtime::call(eosio::name from, const bytes& to, uint128_t value, const bytes& data, uint64_t gas_limit) {
+    require_auth(from);
 }
 
 void stub_evm_runtime::sendbridgemsg(const bridge_message_t &message) {
-    onbridgemsg_action onbridgemsg_act(eosio::name("eosio.erc2o"), {{get_self(), "active"_n}});
+    onbridgemsg_action onbridgemsg_act(eosio::name("eosio.evmtok"), {{get_self(), "active"_n}});
     onbridgemsg_act.send(message);
 }
 

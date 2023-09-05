@@ -19,12 +19,11 @@ extern const eosio::chain::symbol token_symbol;
 extern const eosio::chain::name evm_account;
 extern const eosio::chain::name faucet_account_name;
 extern const eosio::chain::name erc20_account;
+extern const eosio::chain::name evmtok_account;
 using namespace eosio;
 using namespace eosio::chain;
 
 class erc20_tester : public eosio::testing::base_tester {
-
-private:
    public:
     const eosio::chain::symbol native_symbol;
     explicit erc20_tester(std::string native_symbol_str = "4,EOS");
