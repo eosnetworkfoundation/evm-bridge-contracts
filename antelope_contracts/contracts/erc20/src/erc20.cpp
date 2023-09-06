@@ -334,4 +334,43 @@ void erc20::removeegress(const std::vector<name>& accounts) {
             egresslist_table.erase(it);
 }
 
+void erc20::withdrawfee(eosio::name token_contract, eosio::asset quantity, eosio::name to, std::string memo) {
+    require_auth(get_self());
+
+    uint128_t v = token_contract.value;
+    v <<= 64;
+    v |= quantity.symbol.code().raw();
+
+    token_table_t token_table(_self, _self.value);
+    auto index = token_table.get_index<"by.symbol"_n>();
+    auto itr = index.find(v);
+
+    eosio::check(itr != index.end() && itr->fee_balance.symbol == quantity.symbol, "token not registered");
+
+    eosio::check(itr->fee_balance >= quantity, "overdrawn balance");
+    token_table.modify(*itr, _self, [&](auto &v) {
+        v.fee_balance -= quantity;
+    });
+
+    eosio::token::transfer_action transfer_act(itr->token_contract, {{get_self(), "active"_n}});
+    transfer_act.send(get_self(), to, quantity, memo);
+}
+
+void erc20::setingressfee(eosio::name token_contract, eosio::asset ingress_fee) {
+    require_auth(get_self());
+
+    uint128_t v = token_contract.value;
+    v <<= 64;
+    v |= ingress_fee.symbol.code().raw();
+
+    token_table_t token_table(_self, _self.value);
+    auto index = token_table.get_index<"by.symbol"_n>();
+    auto itr = index.find(v);
+
+    eosio::check(itr != index.end() && itr->ingress_fee.symbol == ingress_fee.symbol, "token not registered");
+    token_table.modify(*itr, _self, [&](auto &v) {
+        v.ingress_fee = ingress_fee;
+    });
+}
+
 }  // namespace erc20
