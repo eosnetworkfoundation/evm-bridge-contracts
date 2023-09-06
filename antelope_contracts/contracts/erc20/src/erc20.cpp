@@ -1,6 +1,7 @@
 #include <erc20/eosio.token.hpp>
 #include <erc20/erc20.hpp>
 #include <erc20/hex.hpp>
+#include <erc20/evm_runtime.hpp>
 
 #include <erc20/bytecode.hpp>
 #include <erc20/proxy_bytecode.hpp>
@@ -38,7 +39,7 @@ void initialize_data(bytes& output, const unsigned char (&arr)[Size]) {
 
 // lookup nonce from the multi_index table of evm contract and assert
 uint64_t erc20::get_next_nonce() { 
-    eosio::multi_index<"nextnonces"_n, nextnonce> table(evm_account, evm_account.value);
+    evm_runtime::next_nonce_table table(evm_account, evm_account.value);
     auto itr = table.find(erc2o_account.value);
     uint64_t next_nonce = (itr == table.end() ? 0 : itr->next_nonce);
 
@@ -348,7 +349,7 @@ void erc20::setegressfee(eosio::name token_contract, eosio::symbol_code token_sy
     auto token_table_iter = index_symbol.find(v);
     eosio::check(token_table_iter != index_symbol.end(), "token not registered");
 
-    message_receiver_table message_receivers(evm_account, evm_account.value);
+    evm_runtime::message_receiver_table message_receivers(evm_account, evm_account.value);
     auto message_receivers_iter = message_receivers.find(erc2o_account.value);
     eosio::check(message_receivers_iter != message_receivers.end(), "receiver not registered in evm contract");
     
