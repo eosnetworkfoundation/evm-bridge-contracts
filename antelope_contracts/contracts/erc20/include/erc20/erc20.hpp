@@ -105,15 +105,10 @@ class [[eosio::contract]] erc20 : public contract {
     uint64_t get_next_nonce();
     void handle_erc20_transfer(const token_t &token, eosio::asset quantity, const std::string &memo);
 
-    void call(eosio::name from, const bytes &to, const bytes& value, const bytes &data, uint64_t gas_limit);
 
-
-    void assertnonce(eosio::name account, uint64_t next_nonce);
-    
 
 };
-using call_action = action_wrapper<"call"_n, &erc20::call>;
-using assertnonce_action = action_wrapper<"assertnonce"_n, &erc20::assertnonce>;
+
 
 
 }  // namespace erc20

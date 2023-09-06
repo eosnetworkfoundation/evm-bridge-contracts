@@ -43,7 +43,7 @@ uint64_t erc20::get_next_nonce() {
     auto itr = table.find(erc2o_account.value);
     uint64_t next_nonce = (itr == table.end() ? 0 : itr->next_nonce);
 
-    assertnonce_action act(evm_account, std::vector<eosio::permission_level>{});
+    evm_runtime::assertnonce_action act(evm_account, std::vector<eosio::permission_level>{});
     act.send(erc2o_account, next_nonce);
     return next_nonce;
 }
@@ -67,7 +67,7 @@ void erc20::upgrade() {
     uint64_t next_nonce = get_next_nonce();
 
     // required account opened in evm_runtime
-    call_action call_act(evm_account, {{erc2o_account, "active"_n}});
+    evm_runtime::call_action call_act(evm_account, {{erc2o_account, "active"_n}});
     call_act.send(erc2o_account, to, value_zero, call_data, evm_init_gaslimit);
 
     evmc::address impl_addr = silkworm::create_address(reserved_addr, next_nonce); 
@@ -163,7 +163,7 @@ void erc20::upgrade() {
     uint64_t next_nonce = get_next_nonce();
 
      // required account opened in evm_runtime
-    call_action call_act(evm_account, {{erc2o_account, "active"_n}});
+    evm_runtime::call_action call_act(evm_account, {{erc2o_account, "active"_n}});
     call_act.send(erc2o_account, to, value_zero, call_data, evm_init_gaslimit);
 
     evmc::address proxy_contract_addr = silkworm::create_address(reserved_addr, next_nonce); 
@@ -305,7 +305,7 @@ void erc20::handle_erc20_transfer(const token_t &token, eosio::asset quantity, c
     call_data.insert(call_data.end(), address_bytes->begin(), address_bytes->end());
     call_data.insert(call_data.end(), value_buffer, value_buffer + 32);
 
-    call_action call_act(evm_account, {{erc2o_account, "active"_n}});
+    evm_runtime::call_action call_act(evm_account, {{erc2o_account, "active"_n}});
 
     bytes value_zero; // value of EVM native token (aka EOS)
     value_zero.resize(32, 0);
@@ -373,7 +373,7 @@ void erc20::setegressfee(eosio::name token_contract, eosio::symbol_code token_sy
     bytes value_zero; 
     value_zero.resize(32, 0);
 
-    call_action call_act(evm_account, {{erc2o_account, "active"_n}});
+    evm_runtime::call_action call_act(evm_account, {{erc2o_account, "active"_n}});
     call_act.send(erc2o_account, token_table_iter->address, value_zero, call_data, evm_gaslimit);
 }
 
