@@ -125,6 +125,68 @@ try {
 }
 FC_LOG_AND_RETHROW()
 
+
+BOOST_FIXTURE_TEST_CASE(withdraw_fee, transfer_tester)
+try {
+    auto usdt_symbol = symbol::from_string("4,USDT");
+
+    transfer_token(token_account, faucet_account_name, "alice"_n, make_asset(10000'0000, usdt_symbol));
+
+    BOOST_REQUIRE_EXCEPTION(push_action(
+        evmtok_account, "withdrawfee"_n, evmtok_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(100, usdt_symbol))("memo", "hello1")),
+        eosio_assert_message_exception, eosio_assert_message_is("overdrawn balance"));
+
+    transfer_token(token_account, "alice"_n, evmtok_account, make_asset(10000, usdt_symbol), "0x0000000000000000000000000000000000000000");
+
+    BOOST_REQUIRE_EXCEPTION(push_action(
+        evmtok_account, "withdrawfee"_n, evmtok_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(101, usdt_symbol))("memo", "hello2")),
+        eosio_assert_message_exception, eosio_assert_message_is("overdrawn balance"));
+
+    BOOST_REQUIRE_EXCEPTION(push_action(
+        evmtok_account, "withdrawfee"_n, evmtok_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(-50, usdt_symbol))("memo", "nagative")),
+        eosio_assert_message_exception, eosio_assert_message_is("quantity must be positive"));
+
+    push_action(
+        evmtok_account, "withdrawfee"_n, evmtok_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(50, usdt_symbol))("memo", "hello3"));
+
+    push_action(
+        evmtok_account, "withdrawfee"_n, evmtok_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(50, usdt_symbol))("memo", "hello4"));
+
+    BOOST_REQUIRE_EXCEPTION(push_action(
+        evmtok_account, "withdrawfee"_n, evmtok_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(50, usdt_symbol))("memo", "hello5")),
+        eosio_assert_message_exception, eosio_assert_message_is("overdrawn balance"));
+
+    produce_block();
+}
+FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(set_ingress_fee, transfer_tester)
+try {
+    auto usdt_symbol = symbol::from_string("4,USDT");
+
+    transfer_token(token_account, faucet_account_name, "alice"_n, make_asset(10000'0000, usdt_symbol));
+
+    BOOST_REQUIRE_EXCEPTION(push_action(
+        evmtok_account, "setingressfee"_n, evmtok_account, 
+        mvo()("token_contract", token_account)("ingress_fee", make_asset(-200, usdt_symbol))),
+        eosio_assert_message_exception, eosio_assert_message_is("ingress fee can not be negative"));;
+
+    push_action(
+        evmtok_account, "setingressfee"_n, evmtok_account, mvo()("token_contract", token_account)("ingress_fee", make_asset(200, usdt_symbol)));
+
+    transfer_token(token_account, "alice"_n, evmtok_account, make_asset(10000, usdt_symbol), "0x0000000000000000000000000000000000000000");
+
+    BOOST_REQUIRE_EXCEPTION(push_action(
+        evmtok_account, "withdrawfee"_n, evmtok_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(201, usdt_symbol))("memo", "hello6")),
+        eosio_assert_message_exception, eosio_assert_message_is("overdrawn balance"));
+
+    push_action(
+        evmtok_account, "withdrawfee"_n, evmtok_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(200, usdt_symbol))("memo", "hello7"));
+
+    produce_block();
+}
+FC_LOG_AND_RETHROW()
+
 BOOST_FIXTURE_TEST_CASE(evm_side_transfer, transfer_tester)
 try {
     auto usdt_symbol = symbol::from_string("4,USDT");

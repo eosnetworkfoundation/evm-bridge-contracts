@@ -30,6 +30,13 @@ checksum256 get_code_hash(name account) {
     return code_hash;
 }
 
+inline uint128_t token_symbol_key(eosio::name token_contract, eosio::symbol_code symbol_code) {
+    uint128_t v = token_contract.value;
+    v <<= 64;
+    v |= symbol_code.raw();
+    return v;
+}
+
 template <size_t Size>
 void initialize_data(bytes& output, const unsigned char (&arr)[Size]) {
     static_assert(Size > 128); // ensure bytecode is compiled
@@ -96,12 +103,9 @@ void erc20::upgrade() {
     intx::uint256 egress_fee_evm = egress_fee.amount;
     egress_fee_evm *= minimum_natively_representable;
 
-    uint128_t v = token_contract.value;
-    v <<= 64;
-    v |= ingress_fee.symbol.code().raw();
     token_table_t token_table(_self, _self.value);
     auto index_symbol = token_table.get_index<"by.symbol"_n>();
-    check(index_symbol.find(v) == index_symbol.end(), "token already registered");
+    check(index_symbol.find(token_symbol_key(token_contract, ingress_fee.symbol.code())) == index_symbol.end(), "token already registered");
 
     impl_contract_table_t contract_table(_self, _self.value);
     eosio::check(contract_table.begin() != contract_table.end(), "no implementaion contract available");
@@ -261,13 +265,9 @@ void erc20::transfer(eosio::name from, eosio::name to, eosio::asset quantity,
 
     if (to != get_self() || from == get_self()) return;
 
-    uint128_t v = get_first_receiver().value;
-    v <<= 64;
-    v |= quantity.symbol.code().raw();
-
     token_table_t token_table(_self, _self.value);
     auto index = token_table.get_index<"by.symbol"_n>();
-    auto itr = index.find(v);
+    auto itr = index.find(token_symbol_key(get_first_receiver(), quantity.symbol.code()));
 
     eosio::check(itr != index.end() && itr->ingress_fee.symbol == quantity.symbol, "received unregistered token");
     eosio::check(quantity.amount > itr->ingress_fee.amount, "deposit amount must be greater than ingress fee");
@@ -335,18 +335,49 @@ void erc20::removeegress(const std::vector<name>& accounts) {
             egresslist_table.erase(it);
 }
 
+void erc20::withdrawfee(eosio::name token_contract, eosio::asset quantity, eosio::name to, std::string memo) {
+    require_auth(get_self());
+
+    token_table_t token_table(_self, _self.value);
+    auto index = token_table.get_index<"by.symbol"_n>();
+    auto itr = index.find(token_symbol_key(token_contract, quantity.symbol.code()));
+
+    eosio::check(itr != index.end(), "token not registered");
+    eosio::check(itr->fee_balance.symbol == quantity.symbol, "incorrect precision for registered token");
+    eosio::check(quantity.amount > 0, "quantity must be positive");
+    eosio::check(itr->fee_balance >= quantity, "overdrawn balance");
+    token_table.modify(*itr, _self, [&](auto &v) {
+        v.fee_balance -= quantity;
+    });
+
+    eosio::token::transfer_action transfer_act(itr->token_contract, {{get_self(), "active"_n}});
+    transfer_act.send(get_self(), to, quantity, memo);
+}
+
+void erc20::setingressfee(eosio::name token_contract, eosio::asset ingress_fee) {
+    require_auth(get_self());
+
+    token_table_t token_table(_self, _self.value);
+    auto index = token_table.get_index<"by.symbol"_n>();
+    auto itr = index.find(token_symbol_key(token_contract, ingress_fee.symbol.code()));
+
+    eosio::check(itr != index.end(), "token not registered");
+    eosio::check(itr->ingress_fee.symbol == ingress_fee.symbol, "incorrect precision for registered token");
+    eosio::check(ingress_fee.amount >= 0, "ingress fee can not be negative");
+
+    token_table.modify(*itr, _self, [&](auto &v) {
+        v.ingress_fee = ingress_fee;
+    });
+}
+
 void erc20::setegressfee(eosio::name token_contract, eosio::symbol_code token_symbol_code, const eosio::asset &egress_fee) {
     require_auth(get_self());
 
     eosio::check(egress_fee.symbol == native_token_symbol, "egress_fee should have native token symbol");
 
-    uint128_t v = token_contract.value;
-    v <<= 64;
-    v |= token_symbol_code.raw();
-
     token_table_t token_table(_self, _self.value);
     auto index_symbol = token_table.get_index<"by.symbol"_n>();
-    auto token_table_iter = index_symbol.find(v);
+    auto token_table_iter = index_symbol.find(token_symbol_key(token_contract, token_symbol_code));
     eosio::check(token_table_iter != index_symbol.end(), "token not registered");
 
     evm_runtime::message_receiver_table message_receivers(evm_account, evm_account.value);

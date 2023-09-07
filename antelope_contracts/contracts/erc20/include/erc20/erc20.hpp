@@ -51,8 +51,8 @@ class [[eosio::contract]] erc20 : public contract {
     [[eosio::action]] void addegress(const std::vector<name> &accounts);
     [[eosio::action]] void removeegress(const std::vector<name> &accounts);
     [[eosio::action]] void setegressfee(eosio::name token_contract, eosio::symbol_code token_symbol_code, const eosio::asset &egress_fee);
-
-    
+    [[eosio::action]] void setingressfee(eosio::name token_contract, eosio::asset ingress_fee);
+    [[eosio::action]] void withdrawfee(eosio::name token_contract, eosio::asset quantity, eosio::name to, std::string memo);
 
     struct [[eosio::table("implcontract")]] impl_contract_t {
         uint64_t id = 0;
@@ -104,8 +104,6 @@ class [[eosio::contract]] erc20 : public contract {
 
     uint64_t get_next_nonce();
     void handle_erc20_transfer(const token_t &token, eosio::asset quantity, const std::string &memo);
-
-
 
 };
 
