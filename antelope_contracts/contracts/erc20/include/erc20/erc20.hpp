@@ -43,6 +43,7 @@ class [[eosio::contract]] erc20 : public contract {
     // evm runtime will call this to notify erc20 about the message from 'from' with 'data'.
     [[eosio::action]] void onbridgemsg(const bridge_message_t &message);
     [[eosio::action]] void upgrade();
+    [[eosio::action]] void upgradeto(std::string impl_address);
 
     [[eosio::action]] void regtoken(eosio::name eos_contract_name,
                                     std::string evm_token_name, std::string evm_token_symbol, 

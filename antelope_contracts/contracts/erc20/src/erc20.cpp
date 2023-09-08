@@ -86,6 +86,22 @@ void erc20::upgrade() {
     });
 }
 
+void erc20::upgradeto(std::string impl_address) {
+    require_auth(get_self());
+    auto address_bytes = from_hex(impl_address);
+    eosio::check(!!address_bytes, "memo must be valid 0x EVM address");
+    eosio::check(address_bytes->size() == kAddressLength, "memo must be valid 0x EVM address");
+
+    uint64_t id = 0;
+    impl_contract_table_t contract_table(_self, _self.value);
+
+    contract_table.emplace(_self, [&](auto &v) {
+        v.id = id;
+        v.address.resize(kAddressLength);
+        memcpy(&(v.address[0]), address_bytes->data(), kAddressLength);
+    });
+}
+
 [[eosio::action]] void erc20::regtoken(eosio::name token_contract, std::string evm_token_name, std::string evm_token_symbol, const eosio::asset& ingress_fee, const eosio::asset &egress_fee, uint8_t erc20_precision) {
     require_auth(get_self());
 
