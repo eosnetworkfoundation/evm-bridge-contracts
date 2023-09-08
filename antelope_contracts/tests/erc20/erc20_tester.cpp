@@ -314,7 +314,7 @@ std::string erc20_tester::getSolidityContractAddress() {
     auto r = fc::raw::unpack<token_t>(
         kv_obj->value.data(),
         kv_obj->value.size());
-
+    BOOST_TEST_MESSAGE(std::string("address size:") + std::to_string(r.address.size()));
     return vec_to_hex(r.address, true);
 }
 
