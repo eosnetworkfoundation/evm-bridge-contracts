@@ -252,7 +252,7 @@ inline std::optional<bytes> from_hex(std::string_view hex) {
 inline std::string vec_to_hex(bytes byte_array, bool with_prefix) {
     static const char* kHexDigits{"0123456789abcdef"};
     std::string out(byte_array.size() * 2 + (with_prefix ? 2 : 0), '\0');
-    char* dest{&out[0]};
+    char* dest{out.data()};
     if (with_prefix) {
         *dest++ = '0';
         *dest++ = 'x';
