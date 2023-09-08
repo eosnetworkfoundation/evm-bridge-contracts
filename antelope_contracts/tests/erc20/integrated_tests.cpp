@@ -96,7 +96,6 @@ struct it_tester : erc20_tester {
         produce_block();
 
         evm_address = getSolidityContractAddress();
-        BOOST_TEST_MESSAGE(evm_address);
         BOOST_REQUIRE_MESSAGE(evm_address.size() == 42, std::string("address wrong: ") + evm_address);
 
         // init();
@@ -105,8 +104,8 @@ struct it_tester : erc20_tester {
         exec_input input;
         input.context = context;
         input.to = *erc20_test::from_hex(evm_address.c_str());
-        BOOST_TEST_MESSAGE(evm_address);
         BOOST_REQUIRE_MESSAGE(input.to.size() == 20, std::string("address wrong: ") + evm_address);
+
         bytes calldata;
         uint8_t func[4] = {0x6a, 0x03, 0x66, 0xbf};  // sha3(egressFee())[:4] = 6a0366bf
 
@@ -202,7 +201,6 @@ try {
     auto addr_alice = silkworm::make_reserved_address("alice"_n.to_uint64_t());
 
     auto fee = egressFee();
-    BOOST_TEST_MESSAGE(intx::to_string(fee));
 
     // Give some EOS
     transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(1000000, eos_token_symbol), evm1.address_0x().c_str());
@@ -229,10 +227,10 @@ try {
     produce_block();
 
     bal = balanceOf(evm1.address_0x().c_str());
-    BOOST_TEST_MESSAGE(intx::to_string(bal));
+
     BOOST_REQUIRE(bal == 989000);
     bal = get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount();
-    BOOST_TEST_MESSAGE(intx::to_string(bal));
+
     BOOST_REQUIRE(99990010 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
 }
 FC_LOG_AND_RETHROW()
