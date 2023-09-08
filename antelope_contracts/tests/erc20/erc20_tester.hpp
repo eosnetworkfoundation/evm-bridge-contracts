@@ -258,8 +258,8 @@ inline std::string vec_to_hex(bytes byte_array, bool with_prefix) {
         *dest++ = 'x';
     }
     for (const auto& b : byte_array) {
-        *dest++ = kHexDigits[b >> 4];    // Hi
-        *dest++ = kHexDigits[b & 0x0f];  // Lo
+        *dest++ = kHexDigits[(uint8_t)b >> 4];    // Hi
+        *dest++ = kHexDigits[(uint8_t)b & 0x0f];  // Lo
     }
     return out;
 }
