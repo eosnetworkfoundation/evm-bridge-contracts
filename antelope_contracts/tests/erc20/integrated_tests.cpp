@@ -97,7 +97,8 @@ struct it_tester : erc20_tester {
 
         evm_address = getSolidityContractAddress();
 
-        BOOST_REQUIRE(!evm_address.empty());
+        BOOST_REQUIRE_MESSAGE(evm_address.size() == 42, std::string("address wrong: ") + evm_address);
+
         // init();
     }
     intx::uint256 egressFee(std::optional<exec_callback> callback = {}, std::optional<bytes> context = {}) {
