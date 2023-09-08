@@ -19,7 +19,8 @@ extern const eosio::chain::symbol token_symbol;
 extern const eosio::chain::name evm_account;
 extern const eosio::chain::name faucet_account_name;
 extern const eosio::chain::name erc20_account;
-extern const eosio::chain::name evmtok_account;
+extern const eosio::chain::name evmin_account;
+
 using namespace eosio;
 using namespace eosio::chain;
 

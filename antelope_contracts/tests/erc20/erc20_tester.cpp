@@ -26,7 +26,7 @@ const eosio::chain::symbol token_symbol(4u, "USDT");
 const eosio::chain::name evm_account("eosio.evm");
 const eosio::chain::name faucet_account_name("eosio.faucet");
 const eosio::chain::name erc20_account("eosio.erc2o");
-const eosio::chain::name evmtok_account("eosio.evmtok");
+const eosio::chain::name evmin_account("eosio.evmin");
 
 erc20_tester::erc20_tester(std::string native_symbol_str) : native_symbol(symbol::from_string(native_symbol_str)) {
 
@@ -50,14 +50,8 @@ erc20_tester::erc20_tester(std::string native_symbol_str) : native_symbol(symbol
 
     produce_block();
 
-    create_accounts({eos_token_account, evm_account, token_account, faucet_account_name, erc20_account, evmtok_account});
-
-    auto delegated_auth = authority( 1, {},
-                          {
-                            { .permission = {evmtok_account,config::active_name}, .weight = 1}
-                          });
-
-    set_authority( erc20_account, config::active_name,  delegated_auth );
+    create_accounts({eos_token_account, evm_account, token_account, faucet_account_name, erc20_account});
+    create_account(evmin_account, config::system_account_name, false, true);
 
     set_code(eos_token_account, testing::contracts::eosio_token_wasm());
     set_abi(eos_token_account, testing::contracts::eosio_token_abi().data());
@@ -84,19 +78,21 @@ erc20_tester::erc20_tester(std::string native_symbol_str) : native_symbol(symbol
                 token_account,
                 mvo()("to", faucet_account_name)("quantity", asset(1'000'000'000'0000, symbol::from_string("4,USDT")))("memo", ""));
 
+    set_code(evmin_account, testing::contracts::evm_depoit_proxy_wasm());
+
     produce_block();
 
-    set_code(evmtok_account, testing::contracts::erc20_wasm());
-    set_abi(evmtok_account, testing::contracts::erc20_abi().data());
+    set_code(erc20_account, testing::contracts::erc20_wasm());
+    set_abi(erc20_account, testing::contracts::erc20_abi().data());
 
     produce_block();
 
     // ./cleos push action eosio.erc2o init '[0]' -p eosio.erc2o
-    push_action(evmtok_account, "upgrade"_n, evmtok_account, mvo());
+    push_action(erc20_account, "upgrade"_n, erc20_account, mvo());
 
     produce_block();
 
-    push_action(evmtok_account, "regtoken"_n, evmtok_account, mvo()("eos_contract_name",token_account.to_string())("evm_token_name","EVM USDT V1")("evm_token_symbol","WUSDT")("ingress_fee","0.0100 USDT")("egress_fee","0.0100 EOS")("erc20_precision",6));
+    push_action(erc20_account, "regtoken"_n, erc20_account, mvo()("eos_contract_name",token_account.to_string())("evm_token_name","EVM USDT V1")("evm_token_symbol","WUSDT")("ingress_fee","0.0100 USDT")("egress_fee","0.0100 EOS")("erc20_precision",6));
 
     produce_block();
 
