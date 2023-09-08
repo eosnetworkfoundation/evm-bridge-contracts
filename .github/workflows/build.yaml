@@ -207,4 +207,4 @@ jobs:
       - name: EVM Bridge Contracts Tests
         run: |
           pushd evm-bridge-contracts/build
-          ctest --output-on-failure
+          ./antelope_contracts/tests/erc20/unit_test --log_level=all
