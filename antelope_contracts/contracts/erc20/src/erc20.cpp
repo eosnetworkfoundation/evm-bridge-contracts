@@ -89,8 +89,8 @@ void erc20::upgrade() {
 void erc20::upgradeto(std::string impl_address) {
     require_auth(get_self());
     auto address_bytes = from_hex(impl_address);
-    eosio::check(!!address_bytes, "memo must be valid 0x EVM address");
-    eosio::check(address_bytes->size() == kAddressLength, "memo must be valid 0x EVM address");
+    eosio::check(!!address_bytes, "implementation address must be valid 0x EVM address");
+    eosio::check(address_bytes->size() == kAddressLength, "invalid length of implementation address");
 
     uint64_t id = 0;
     impl_contract_table_t contract_table(_self, _self.value);
