@@ -201,7 +201,7 @@ jobs:
           pushd evm-bridge-contracts
           mkdir build
           pushd build
-          cmake ..
+          cmake -Deosevm_DIR=${{ steps.evm-contract.outputs.EVM_CONTRACT }} ..
           make -j
 
       - name: EVM Bridge Contracts Tests
