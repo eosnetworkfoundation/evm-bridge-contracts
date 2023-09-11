@@ -47,11 +47,11 @@ void initialize_data(bytes& output, const unsigned char (&arr)[Size]) {
 // lookup nonce from the multi_index table of evm contract and assert
 uint64_t erc20::get_next_nonce() { 
     evm_runtime::next_nonce_table table(evm_account, evm_account.value);
-    auto itr = table.find(erc2o_account.value);
+    auto itr = table.find(receiver_account().value);
     uint64_t next_nonce = (itr == table.end() ? 0 : itr->next_nonce);
 
     evm_runtime::assertnonce_action act(evm_account, std::vector<eosio::permission_level>{});
-    act.send(erc2o_account, next_nonce);
+    act.send(receiver_account(), next_nonce);
     return next_nonce;
 }
 
@@ -64,7 +64,7 @@ void erc20::upgrade() {
 
     bytes call_data;
 
-    auto reserved_addr = silkworm::make_reserved_address(erc2o_account.value);
+    auto reserved_addr = silkworm::make_reserved_address(receiver_account().value);
     initialize_data(call_data, solidity::erc20::bytecode);
 
     bytes to = {};
@@ -74,8 +74,8 @@ void erc20::upgrade() {
     uint64_t next_nonce = get_next_nonce();
 
     // required account opened in evm_runtime
-    evm_runtime::call_action call_act(evm_account, {{erc2o_account, "active"_n}});
-    call_act.send(erc2o_account, to, value_zero, call_data, evm_init_gaslimit);
+    evm_runtime::call_action call_act(evm_account, {{receiver_account(), "active"_n}});
+    call_act.send(receiver_account(), to, value_zero, call_data, evm_init_gaslimit);
 
     evmc::address impl_addr = silkworm::create_address(reserved_addr, next_nonce); 
 
@@ -128,7 +128,7 @@ void erc20::upgradeto(std::string impl_address) {
     auto contract_itr = contract_table.end();
     --contract_itr;
 
-    auto reserved_addr = silkworm::make_reserved_address(erc2o_account.value);
+    auto reserved_addr = silkworm::make_reserved_address(receiver_account().value);
 
     bytes call_data;
     initialize_data(call_data, solidity::proxy::bytecode);
@@ -183,8 +183,8 @@ void erc20::upgradeto(std::string impl_address) {
     uint64_t next_nonce = get_next_nonce();
 
      // required account opened in evm_runtime
-    evm_runtime::call_action call_act(evm_account, {{erc2o_account, "active"_n}});
-    call_act.send(erc2o_account, to, value_zero, call_data, evm_init_gaslimit);
+    evm_runtime::call_action call_act(evm_account, {{receiver_account(), "active"_n}});
+    call_act.send(receiver_account(), to, value_zero, call_data, evm_init_gaslimit);
 
     evmc::address proxy_contract_addr = silkworm::create_address(reserved_addr, next_nonce); 
 
@@ -206,7 +206,7 @@ void erc20::onbridgemsg(const bridge_message_t &message) {
     check(get_sender() == evm_account, "invalid sender of onbridgemsg");
 
     const bridge_message_v0 &msg = std::get<bridge_message_v0>(message);
-    check(msg.receiver == erc2o_account, "invalid message receiver");
+    check(msg.receiver == receiver_account(), "invalid message receiver");
 
     checksum256 addr_key = make_key(msg.sender);
 
@@ -321,12 +321,12 @@ void erc20::handle_erc20_transfer(const token_t &token, eosio::asset quantity, c
     call_data.insert(call_data.end(), address_bytes->begin(), address_bytes->end());
     call_data.insert(call_data.end(), value_buffer, value_buffer + 32);
 
-    evm_runtime::call_action call_act(evm_account, {{erc2o_account, "active"_n}});
+    evm_runtime::call_action call_act(evm_account, {{receiver_account(), "active"_n}});
 
     bytes value_zero; // value of EVM native token (aka EOS)
     value_zero.resize(32, 0);
 
-    call_act.send(erc2o_account /*from*/, token.address /*to*/, value_zero /*value*/, call_data /*data*/, evm_gaslimit /*gas_limit*/);
+    call_act.send(receiver_account() /*from*/, token.address /*to*/, value_zero /*value*/, call_data /*data*/, evm_gaslimit /*gas_limit*/);
 }
 
 void erc20::addegress(const std::vector<name>& accounts) {
@@ -397,7 +397,7 @@ void erc20::setegressfee(eosio::name token_contract, eosio::symbol_code token_sy
     eosio::check(token_table_iter != index_symbol.end(), "token not registered");
 
     evm_runtime::message_receiver_table message_receivers(evm_account, evm_account.value);
-    auto message_receivers_iter = message_receivers.find(erc2o_account.value);
+    auto message_receivers_iter = message_receivers.find(receiver_account().value);
     eosio::check(message_receivers_iter != message_receivers.end(), "receiver not registered in evm contract");
     
     eosio::check(egress_fee >= message_receivers_iter->min_fee, "egress fee must be at least as large as the receiver's minimum fee");
@@ -420,8 +420,12 @@ void erc20::setegressfee(eosio::name token_contract, eosio::symbol_code token_sy
     bytes value_zero; 
     value_zero.resize(32, 0);
 
-    evm_runtime::call_action call_act(evm_account, {{erc2o_account, "active"_n}});
-    call_act.send(erc2o_account, token_table_iter->address, value_zero, call_data, evm_gaslimit);
+    evm_runtime::call_action call_act(evm_account, {{receiver_account(), "active"_n}});
+    call_act.send(receiver_account(), token_table_iter->address, value_zero, call_data, evm_gaslimit);
+}
+
+inline eosio::name erc20::receiver_account()const {
+    return get_self();
 }
 
 }  // namespace erc20

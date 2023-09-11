@@ -106,6 +106,8 @@ class [[eosio::contract]] erc20 : public contract {
     uint64_t get_next_nonce();
     void handle_erc20_transfer(const token_t &token, eosio::asset quantity, const std::string &memo);
 
+private:
+    eosio::name receiver_account()const;
 };
 
 

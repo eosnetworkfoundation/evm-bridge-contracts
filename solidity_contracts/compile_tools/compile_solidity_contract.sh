@@ -30,7 +30,7 @@ set -o pipefail
 # 2 solcjs will start to generate PUSH0 after 0.8.20. We do not support this yet, so we have to specify EVM versions using standard-json inputs.
 # 3 solcjs --starndard-json has some bugs (https://github.com/ethereum/solc-js/issues/460) so we can only use "content" as input.
 # 4 To copy the source code into the json file, we have to escape \\ \" \t \n. (Ignore \b \r \f as we shouldn't have them in sol file)
-
+tmpfile=$(mktemp)
 cat "$SOLIDITY_SOURCE_FILE_PATH" \
 | awk -v token="__CONTRACT_CONTENT" '
     BEGIN {
@@ -52,7 +52,8 @@ cat "$SOLIDITY_SOURCE_FILE_PATH" \
         print template
     }
     ' "$SOLCJS_INPUT_JSON_TEMPLATE_FILE_PATH" \
-| solcjs -p --standard-json `# Compile Solidity code` \
+| solcjs -p --standard-json > $tmpfile `# Compile Solidity code`
+cat $tmpfile \
 | grep -v ">>>" `# Remove any additional messages solcjs prints` \
 | jq --stream 'try inputs' `# This and the next line are to work around the fact that solcjs outputs an incomplete JSON` \
 | jq -n 'reduce inputs as $i ({}; if ($i | has(1)) then setpath($i[0]; $i[1]) else . end)' \
@@ -73,3 +74,4 @@ cat "$SOLIDITY_SOURCE_FILE_PATH" \
         print
     }
     ' "$BYTECODE_HEADER_TEMPLATE_FILE_PATH"
+    rm -f $tmpfile

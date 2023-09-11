@@ -5,3 +5,4 @@ find_package(cdt REQUIRED)
 
 add_subdirectory(erc20)
 add_subdirectory(stubs)
+add_subdirectory(deposit_proxy)
