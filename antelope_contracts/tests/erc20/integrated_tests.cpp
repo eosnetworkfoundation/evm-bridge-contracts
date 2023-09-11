@@ -210,7 +210,7 @@ try {
 
     produce_block();
 
-    transfer_token(token_account, "alice"_n, evmtok_account, make_asset(10000, token_symbol), evm1.address_0x().c_str());
+    transfer_token(token_account, "alice"_n, erc20_account, make_asset(10000, token_symbol), evm1.address_0x().c_str());
 
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE(bal == 990000);
@@ -248,13 +248,13 @@ try {
     BOOST_REQUIRE(bal == 0);
     produce_block();
 
-    transfer_token(token_account, "alice"_n, evmtok_account, make_asset(10000, token_symbol), evm1.address_0x().c_str());
+    transfer_token(token_account, "alice"_n, erc20_account, make_asset(10000, token_symbol), evm1.address_0x().c_str());
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE(bal == 990000); // +1000000 - 10000
     BOOST_REQUIRE(99990000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // -10000
     produce_block();
 
-    BOOST_REQUIRE_EXCEPTION(transfer_token(token_account, "alice"_n, evmtok_account, make_asset(0, token_symbol), evm1.address_0x().c_str()),
+    BOOST_REQUIRE_EXCEPTION(transfer_token(token_account, "alice"_n, erc20_account, make_asset(0, token_symbol), evm1.address_0x().c_str()),
                             eosio_assert_message_exception, eosio_assert_message_is("must transfer positive quantity"));
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE(bal == 990000);
@@ -262,21 +262,21 @@ try {
     produce_block();
 
 
-    BOOST_REQUIRE_EXCEPTION(transfer_token(token_account, "alice"_n, evmtok_account, make_asset(10, token_symbol), evm1.address_0x().c_str()),
+    BOOST_REQUIRE_EXCEPTION(transfer_token(token_account, "alice"_n, erc20_account, make_asset(10, token_symbol), evm1.address_0x().c_str()),
                             eosio_assert_message_exception, eosio_assert_message_is("deposit amount must be greater than ingress fee"));
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE(bal == 990000);
     BOOST_REQUIRE(99990000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
     produce_block();
 
-    BOOST_REQUIRE_EXCEPTION(transfer_token(token_account, "alice"_n, evmtok_account, make_asset(100, token_symbol), evm1.address_0x().c_str()),
+    BOOST_REQUIRE_EXCEPTION(transfer_token(token_account, "alice"_n, erc20_account, make_asset(100, token_symbol), evm1.address_0x().c_str()),
                             eosio_assert_message_exception, eosio_assert_message_is("deposit amount must be greater than ingress fee"));
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE(bal == 990000);
     BOOST_REQUIRE(99990000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
     produce_block();
 
-    transfer_token(token_account, "alice"_n, evmtok_account, make_asset(101, token_symbol), evm1.address_0x().c_str());
+    transfer_token(token_account, "alice"_n, erc20_account, make_asset(101, token_symbol), evm1.address_0x().c_str());
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE(bal == 990100); // 9900000 + (10100 - 10000)
     BOOST_REQUIRE(99989899 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 99990000 - 101
@@ -293,7 +293,7 @@ try {
     transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(1000000, eos_token_symbol), evm1.address_0x().c_str());
     produce_block();
 
-    transfer_token(token_account, "alice"_n, evmtok_account, make_asset(10000100, token_symbol), evm1.address_0x().c_str());
+    transfer_token(token_account, "alice"_n, erc20_account, make_asset(10000100, token_symbol), evm1.address_0x().c_str());
     auto bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE(bal == 1000000000); // +1000010000 - 10000, 1000 USDT
     BOOST_REQUIRE(89999900 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 
@@ -347,39 +347,39 @@ try {
     transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(1000000, eos_token_symbol), evm1.address_0x().c_str());
     produce_block();
 
-    transfer_token(token_account, "alice"_n, evmtok_account, make_asset(10000100, token_symbol), evm1.address_0x().c_str());
+    transfer_token(token_account, "alice"_n, erc20_account, make_asset(10000100, token_symbol), evm1.address_0x().c_str());
     auto bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE(bal == 1000000000); // +1000010000 - 10000, 1000 USDT
     BOOST_REQUIRE(89999900 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 
-    BOOST_REQUIRE(10000100 == get_balance(evmtok_account, token_account, symbol::from_string("4,USDT")).get_amount()); 
+    BOOST_REQUIRE(10000100 == get_balance(erc20_account, token_account, symbol::from_string("4,USDT")).get_amount()); 
     produce_block();
 
-    push_action(evmtok_account, "setingressfee"_n, evmtok_account, 
+    push_action(erc20_account, "setingressfee"_n, erc20_account, 
         mvo()("token_contract", token_account)("ingress_fee", make_asset(200, token_symbol)));
 
-    transfer_token(token_account, "alice"_n, evmtok_account, make_asset(10000200, token_symbol), evm1.address_0x().c_str());
+    transfer_token(token_account, "alice"_n, erc20_account, make_asset(10000200, token_symbol), evm1.address_0x().c_str());
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE(bal == 2000000000); // 1000000000 +1000020000 - 20000, 2000 USDT
     BOOST_REQUIRE(79999700 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 
-    BOOST_REQUIRE(20000300 == get_balance(evmtok_account, token_account, symbol::from_string("4,USDT")).get_amount()); 
+    BOOST_REQUIRE(20000300 == get_balance(erc20_account, token_account, symbol::from_string("4,USDT")).get_amount()); 
     produce_block();
 
     // Change fee and try transfer again.
-    push_action(evmtok_account, "setingressfee"_n, evmtok_account, 
+    push_action(erc20_account, "setingressfee"_n, erc20_account, 
         mvo()("token_contract", token_account)("ingress_fee", make_asset(0, token_symbol)));
 
-    transfer_token(token_account, "alice"_n, evmtok_account, make_asset(10000000, token_symbol), evm1.address_0x().c_str());
+    transfer_token(token_account, "alice"_n, erc20_account, make_asset(10000000, token_symbol), evm1.address_0x().c_str());
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE(bal == 3000000000); // +1000000000
     BOOST_REQUIRE(69999700 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 
-    BOOST_REQUIRE(30000300 == get_balance(evmtok_account, token_account, symbol::from_string("4,USDT")).get_amount()); 
+    BOOST_REQUIRE(30000300 == get_balance(erc20_account, token_account, symbol::from_string("4,USDT")).get_amount()); 
     produce_block();
 
-    BOOST_REQUIRE_EXCEPTION(push_action(evmtok_account, "setingressfee"_n, evmtok_account, 
+    BOOST_REQUIRE_EXCEPTION(push_action(erc20_account, "setingressfee"_n, erc20_account, 
         mvo()("token_contract", token_account)("ingress_fee", make_asset(0, symbol::from_string("4,USDC"))));,
             eosio_assert_message_exception, eosio_assert_message_is("token not registered"));
 
-    BOOST_REQUIRE_EXCEPTION(push_action(evmtok_account, "setingressfee"_n, evmtok_account, 
+    BOOST_REQUIRE_EXCEPTION(push_action(erc20_account, "setingressfee"_n, erc20_account, 
         mvo()("token_contract", token_account)("ingress_fee", make_asset(0, symbol::from_string("2,USDT"))));,
             eosio_assert_message_exception, eosio_assert_message_is("incorrect precision for registered token"));
 
@@ -390,7 +390,7 @@ BOOST_FIXTURE_TEST_CASE(it_set_egress_fee, it_tester)
 try {
     constexpr intx::uint256 minimum_natively_representable = intx::exp(10_u256, intx::uint256(18 - 4));
 
-    BOOST_REQUIRE_EXCEPTION(push_action(evmtok_account, "setegressfee"_n, evmtok_account, 
+    BOOST_REQUIRE_EXCEPTION(push_action(erc20_account, "setegressfee"_n, erc20_account, 
         mvo()("token_contract", token_account)("token_symbol_code", "USDT")("egress_fee", make_asset(50))),
         eosio_assert_message_exception, eosio_assert_message_is("egress fee must be at least as large as the receiver's minimum fee"));
 
@@ -400,16 +400,16 @@ try {
 
     produce_block();
     // set to 0.5
-    push_action(evmtok_account, "setegressfee"_n, evmtok_account, 
+    push_action(erc20_account, "setegressfee"_n, erc20_account, 
         mvo()("token_contract", token_account)("token_symbol_code", "USDT")("egress_fee", make_asset(5000)));
     
     BOOST_REQUIRE(5000 * minimum_natively_representable == egressFee());
 
     produce_block();
    
-    BOOST_REQUIRE_EXCEPTION(push_action(evmtok_account, "setegressfee"_n, evm_account, 
+    BOOST_REQUIRE_EXCEPTION(push_action(erc20_account, "setegressfee"_n, evm_account, 
         mvo()("token_contract", token_account)("token_symbol_code", "USDT")("egress_fee", make_asset(1000))),
-        missing_auth_exception, eosio::testing::fc_exception_message_starts_with("missing authority of eosio.evmtok"));
+        missing_auth_exception, eosio::testing::fc_exception_message_starts_with("missing authority of eosio.erc2o"));
 
 
     produce_block();
@@ -422,7 +422,7 @@ try {
 
     produce_block();
 
-    BOOST_REQUIRE_EXCEPTION(push_action(evmtok_account, "setegressfee"_n, evmtok_account, 
+    BOOST_REQUIRE_EXCEPTION(push_action(erc20_account, "setegressfee"_n, erc20_account, 
         mvo()("token_contract", token_account)("token_symbol_code", "USDT")("egress_fee", make_asset(2000))),
         unsatisfied_authorization, eosio::testing::fc_exception_message_contains("eosio.erc2o"));
 
@@ -438,35 +438,35 @@ try {
     transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(1000000, eos_token_symbol), evm1.address_0x().c_str());
     produce_block();
 
-    transfer_token(token_account, "alice"_n, evmtok_account, make_asset(10000100, token_symbol), evm1.address_0x().c_str());
+    transfer_token(token_account, "alice"_n, erc20_account, make_asset(10000100, token_symbol), evm1.address_0x().c_str());
     auto bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE(bal == 1000000000); // +1000010000 - 10000, 1000 USDT
     BOOST_REQUIRE(89999900 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 
-    BOOST_REQUIRE(10000100 == get_balance(evmtok_account, token_account, symbol::from_string("4,USDT")).get_amount()); 
+    BOOST_REQUIRE(10000100 == get_balance(erc20_account, token_account, symbol::from_string("4,USDT")).get_amount()); 
     produce_block();
 
-    BOOST_REQUIRE_EXCEPTION(push_action(evmtok_account, "withdrawfee"_n, evmtok_account, 
+    BOOST_REQUIRE_EXCEPTION(push_action(erc20_account, "withdrawfee"_n, erc20_account, 
         mvo()("token_contract", token_account)("quantity", make_asset(10000, token_symbol))("to", "alice"_n)("memo", "asd")),
         eosio_assert_message_exception, eosio_assert_message_is("overdrawn balance"));
 
-    BOOST_REQUIRE_EXCEPTION(push_action(evmtok_account, "withdrawfee"_n, evmtok_account, 
+    BOOST_REQUIRE_EXCEPTION(push_action(erc20_account, "withdrawfee"_n, erc20_account, 
         mvo()("token_contract", token_account)("quantity", make_asset(0, token_symbol))("to", "alice"_n)("memo", "asd")),
         eosio_assert_message_exception, eosio_assert_message_is("quantity must be positive"));
 
-    BOOST_REQUIRE_EXCEPTION(push_action(evmtok_account, "withdrawfee"_n, evmtok_account, 
+    BOOST_REQUIRE_EXCEPTION(push_action(erc20_account, "withdrawfee"_n, erc20_account, 
         mvo()("token_contract", token_account)("quantity", make_asset(100, symbol::from_string("4,USDC")))("to", "alice"_n)("memo", "asd")),
         eosio_assert_message_exception, eosio_assert_message_is("token not registered"));
 
-    BOOST_REQUIRE_EXCEPTION(push_action(evmtok_account, "withdrawfee"_n, evmtok_account, 
+    BOOST_REQUIRE_EXCEPTION(push_action(erc20_account, "withdrawfee"_n, erc20_account, 
         mvo()("token_contract", token_account)("quantity", make_asset(100, symbol::from_string("2,USDT")))("to", "alice"_n)("memo", "asd")),
         eosio_assert_message_exception, eosio_assert_message_is("incorrect precision for registered token"));
 
-    push_action(evmtok_account, "withdrawfee"_n, evmtok_account, 
+    push_action(erc20_account, "withdrawfee"_n, erc20_account, 
         mvo()("token_contract", token_account)("quantity", make_asset(100, token_symbol))("to", "alice"_n)("memo", "asd"));
     
     BOOST_REQUIRE(bal == 1000000000); // +1000010000 - 10000, 1000 USDT
     BOOST_REQUIRE(90000000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); 
-    BOOST_REQUIRE(10000000 == get_balance(evmtok_account, token_account, symbol::from_string("4,USDT")).get_amount()); 
+    BOOST_REQUIRE(10000000 == get_balance(erc20_account, token_account, symbol::from_string("4,USDT")).get_amount()); 
 
 
 

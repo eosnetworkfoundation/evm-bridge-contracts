@@ -33,6 +33,6 @@ add_eosio_test_executable( unit_test
     ${EXTERNAL_DIR}/silkworm/third_party/ethash/lib/ethash/ethash.cpp
     ${EXTERNAL_DIR}/silkworm/third_party/ethash/lib/ethash/primes.c
 )
-
+add_dependencies(unit_test contracts)
 # TODO: add back eos-vm-oc once change to disable EOS VM OC subjective limits during unit test are added
 add_test(NAME erc20_tests COMMAND unit_test --report_level=detailed --color_output )

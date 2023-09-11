@@ -43,6 +43,10 @@ void to_variant(const evmc::address& o, fc::variant& v)
 namespace erc20_test {
 const eosio::chain::symbol token_symbol(4u, "USDT");
 const eosio::chain::symbol eos_token_symbol(4u, "EOS");
+const eosio::chain::name evm_account("eosio.evm");
+const eosio::chain::name faucet_account_name("eosio.faucet");
+const eosio::chain::name erc20_account("eosio.erc2o");
+const eosio::chain::name evmin_account("eosio.evmin");
 
 
 evm_eoa::evm_eoa(std::basic_string<uint8_t> optional_private_key)
@@ -131,7 +135,8 @@ erc20_tester::erc20_tester(bool use_real_evm, std::string native_symbol_str) : n
 
     produce_block();
 
-    create_accounts({eos_token_account, evm_account, token_account, faucet_account_name, erc20_account, evmtok_account});
+    create_accounts({eos_token_account, evm_account, token_account, faucet_account_name, erc20_account});
+    create_account(evmin_account, config::system_account_name, false, true);
 
     set_code(eos_token_account, testing::contracts::eosio_token_wasm());
     set_abi(eos_token_account, testing::contracts::eosio_token_abi().data());
@@ -158,10 +163,12 @@ erc20_tester::erc20_tester(bool use_real_evm, std::string native_symbol_str) : n
                 token_account,
                 mvo()("to", faucet_account_name)("quantity", asset(1'000'000'000'0000, symbol::from_string("4,USDT")))("memo", ""));
 
+    set_code(evmin_account, testing::contracts::evm_depoit_proxy_wasm());
+
     produce_block();
 
-    set_code(evmtok_account, testing::contracts::erc20_wasm());
-    set_abi(evmtok_account, testing::contracts::erc20_abi().data());
+    set_code(erc20_account, testing::contracts::erc20_wasm());
+    set_abi(erc20_account, testing::contracts::erc20_abi().data());
 
     produce_block();
 
@@ -178,7 +185,7 @@ erc20_tester::erc20_tester(bool use_real_evm, std::string native_symbol_str) : n
         open(erc20_account);
 
         transfer_token(eos_token_account, faucet_account_name, evm_account, make_asset(10000'0000), "eosio.erc2o");
-        bridgereg(erc20_account, evmtok_account, asset(100, symbol::from_string("4,EOS")));
+        bridgereg(erc20_account, erc20_account, asset(100, symbol::from_string("4,EOS")));
     } else {
         set_code(evm_account, testing::contracts::evm_stub_wasm());
         set_abi(evm_account, testing::contracts::evm_stub_abi().data());
@@ -192,19 +199,14 @@ erc20_tester::erc20_tester(bool use_real_evm, std::string native_symbol_str) : n
         produce_block();
     }
 
-    auto delegated_auth = authority(1, {},
-                                    {{.permission = {evmtok_account, config::active_name}, .weight = 1}});
-
-    set_authority(erc20_account, config::active_name, delegated_auth);
-
     produce_block();
 
     // ./cleos push action eosio.erc2o init '[0]' -p eosio.erc2o
-    push_action(evmtok_account, "upgrade"_n, evmtok_account, mvo());
+    push_action(erc20_account, "upgrade"_n, erc20_account, mvo());
 
     produce_block();
 
-    push_action(evmtok_account, "regtoken"_n, evmtok_account, mvo()("eos_contract_name", token_account.to_string())("evm_token_name", "EVM USDT V1")("evm_token_symbol", "WUSDT")("ingress_fee", "0.0100 USDT")("egress_fee", "0.0100 EOS")("erc20_precision", 6));
+    push_action(erc20_account, "regtoken"_n, erc20_account, mvo()("eos_contract_name",token_account.to_string())("evm_token_name","EVM USDT V1")("evm_token_symbol","WUSDT")("ingress_fee","0.0100 USDT")("egress_fee","0.0100 EOS")("erc20_precision",6));
 
     produce_block();
 
@@ -304,7 +306,7 @@ std::string erc20_tester::getSolidityContractAddress() {
     auto& db = const_cast<chainbase::database&>(control->db());
 
     const auto* existing_tid = db.find<table_id_object, by_code_scope_table>(
-        boost::make_tuple(evmtok_account, evmtok_account, "tokens"_n));
+        boost::make_tuple(erc20_account, erc20_account, "tokens"_n));
     if (!existing_tid) {
         return {};
     }

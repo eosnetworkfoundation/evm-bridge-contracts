@@ -59,7 +59,7 @@ typedef eosio::multi_index<"msgreceiver"_n, message_receiver> message_receiver_t
 void stub_evm_runtime::init() {
      auto update_row = [&](auto& row) {
         row.account = eosio::name("eosio.erc2o");
-        row.handler = eosio::name("eosio.evmtok");
+        row.handler = eosio::name("eosio.erc2o");
         row.min_fee = eosio::asset(100,token_symbol);
         row.flags   = message_receiver::FORCE_ATOMIC;
     };
@@ -79,7 +79,7 @@ void stub_evm_runtime::call(eosio::name from, const bytes& to, uint128_t value, 
 }
 
 void stub_evm_runtime::sendbridgemsg(const bridge_message_t &message) {
-    onbridgemsg_action onbridgemsg_act(eosio::name("eosio.evmtok"), {{get_self(), "active"_n}});
+    onbridgemsg_action onbridgemsg_act(eosio::name("eosio.erc2o"), {{get_self(), "active"_n}});
     onbridgemsg_act.send(message);
 }
 

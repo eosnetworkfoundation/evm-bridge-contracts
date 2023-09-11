@@ -86,7 +86,7 @@ struct transfer_tester : erc20_tester {
 
         // only evm_runtime can call onbridgemsg
         BOOST_REQUIRE_EXCEPTION(push_action(
-            evmtok_account, "onbridgemsg"_n, "alice"_n, mvo()("message", arr)),
+            erc20_account, "onbridgemsg"_n, "alice"_n, mvo()("message", arr)),
             eosio_assert_message_exception, 
             eosio_assert_message_is("invalid sender of onbridgemsg"));
 
@@ -103,7 +103,7 @@ try {
 
     transfer_token(token_account, faucet_account_name, "alice"_n, make_asset(10000'0000, usdt_symbol));
 
-    auto trace = transfer_token(token_account, "alice"_n, evmtok_account, make_asset(10000, usdt_symbol), "0x0000000000000000000000000000000000000000");
+    auto trace = transfer_token(token_account, "alice"_n, evmin_account, make_asset(10000, usdt_symbol), "0x0000000000000000000000000000000000000000");
     /*
         BOOST_TEST_MESSAGE(trace->action_traces.size());
         for (const auto& t:trace->action_traces) {
@@ -118,8 +118,26 @@ try {
     BOOST_REQUIRE(trace->action_traces.back().act.account == evm_account);
     BOOST_REQUIRE(trace->action_traces.back().act.name.to_string() == "call");
 
-    BOOST_REQUIRE_EXCEPTION(transfer_token(eos_token_account, "alice"_n, evmtok_account, make_asset(10000), "0x0000000000000000000000000000000000000000"),
-                            eosio_assert_message_exception, eosio_assert_message_is("received unregistered token"));
+    const auto dummy_token_account = "dummy"_n;
+    create_accounts({dummy_token_account});
+
+    set_code(dummy_token_account, testing::contracts::eosio_token_wasm());
+    set_abi(dummy_token_account, testing::contracts::eosio_token_abi().data());
+
+    push_action(dummy_token_account,
+                "create"_n,
+                dummy_token_account,
+                mvo()("issuer", dummy_token_account)("maximum_supply", asset(10'000'000'000'0000, eosio::chain::symbol{4,"EOS"})));
+    push_action(dummy_token_account,
+                "issue"_n,
+                dummy_token_account,
+                mvo()("to", dummy_token_account)("quantity", asset(1'000'000'000'0000, eosio::chain::symbol{4,"EOS"}))("memo", ""));
+
+    BOOST_REQUIRE_EXCEPTION(transfer_token(dummy_token_account, dummy_token_account, evmin_account, make_asset(10000), "0x0000000000000000000000000000000000000000"),
+                            eosio_assert_message_exception, eosio_assert_message_is("unregistered token"));
+
+    BOOST_REQUIRE_EXCEPTION(transfer_token(eos_token_account, "alice"_n, evmin_account, make_asset(10000), "0x000000000000000000000000000000000000000Z"),
+                            eosio_assert_message_exception, eosio_assert_message_is("memo must be a valid EVM address"));
 
     produce_block();
 }
@@ -133,27 +151,27 @@ try {
     transfer_token(token_account, faucet_account_name, "alice"_n, make_asset(10000'0000, usdt_symbol));
 
     BOOST_REQUIRE_EXCEPTION(push_action(
-        evmtok_account, "withdrawfee"_n, evmtok_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(100, usdt_symbol))("memo", "hello1")),
+        erc20_account, "withdrawfee"_n, erc20_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(100, usdt_symbol))("memo", "hello1")),
         eosio_assert_message_exception, eosio_assert_message_is("overdrawn balance"));
 
-    transfer_token(token_account, "alice"_n, evmtok_account, make_asset(10000, usdt_symbol), "0x0000000000000000000000000000000000000000");
+    transfer_token(token_account, "alice"_n, evmin_account, make_asset(10000, usdt_symbol), "0x0000000000000000000000000000000000000000");
 
     BOOST_REQUIRE_EXCEPTION(push_action(
-        evmtok_account, "withdrawfee"_n, evmtok_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(101, usdt_symbol))("memo", "hello2")),
+        erc20_account, "withdrawfee"_n, erc20_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(101, usdt_symbol))("memo", "hello2")),
         eosio_assert_message_exception, eosio_assert_message_is("overdrawn balance"));
 
     BOOST_REQUIRE_EXCEPTION(push_action(
-        evmtok_account, "withdrawfee"_n, evmtok_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(-50, usdt_symbol))("memo", "nagative")),
+        erc20_account, "withdrawfee"_n, erc20_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(-50, usdt_symbol))("memo", "nagative")),
         eosio_assert_message_exception, eosio_assert_message_is("quantity must be positive"));
 
     push_action(
-        evmtok_account, "withdrawfee"_n, evmtok_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(50, usdt_symbol))("memo", "hello3"));
+        erc20_account, "withdrawfee"_n, erc20_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(50, usdt_symbol))("memo", "hello3"));
 
     push_action(
-        evmtok_account, "withdrawfee"_n, evmtok_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(50, usdt_symbol))("memo", "hello4"));
+        erc20_account, "withdrawfee"_n, erc20_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(50, usdt_symbol))("memo", "hello4"));
 
     BOOST_REQUIRE_EXCEPTION(push_action(
-        evmtok_account, "withdrawfee"_n, evmtok_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(50, usdt_symbol))("memo", "hello5")),
+        erc20_account, "withdrawfee"_n, erc20_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(50, usdt_symbol))("memo", "hello5")),
         eosio_assert_message_exception, eosio_assert_message_is("overdrawn balance"));
 
     produce_block();
@@ -167,21 +185,21 @@ try {
     transfer_token(token_account, faucet_account_name, "alice"_n, make_asset(10000'0000, usdt_symbol));
 
     BOOST_REQUIRE_EXCEPTION(push_action(
-        evmtok_account, "setingressfee"_n, evmtok_account, 
+        erc20_account, "setingressfee"_n, erc20_account, 
         mvo()("token_contract", token_account)("ingress_fee", make_asset(-200, usdt_symbol))),
         eosio_assert_message_exception, eosio_assert_message_is("ingress fee can not be negative"));;
 
     push_action(
-        evmtok_account, "setingressfee"_n, evmtok_account, mvo()("token_contract", token_account)("ingress_fee", make_asset(200, usdt_symbol)));
+        erc20_account, "setingressfee"_n, erc20_account, mvo()("token_contract", token_account)("ingress_fee", make_asset(200, usdt_symbol)));
 
-    transfer_token(token_account, "alice"_n, evmtok_account, make_asset(10000, usdt_symbol), "0x0000000000000000000000000000000000000000");
+    transfer_token(token_account, "alice"_n, evmin_account, make_asset(10000, usdt_symbol), "0x0000000000000000000000000000000000000000");
 
     BOOST_REQUIRE_EXCEPTION(push_action(
-        evmtok_account, "withdrawfee"_n, evmtok_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(201, usdt_symbol))("memo", "hello6")),
+        erc20_account, "withdrawfee"_n, erc20_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(201, usdt_symbol))("memo", "hello6")),
         eosio_assert_message_exception, eosio_assert_message_is("overdrawn balance"));
 
     push_action(
-        evmtok_account, "withdrawfee"_n, evmtok_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(200, usdt_symbol))("memo", "hello7"));
+        erc20_account, "withdrawfee"_n, erc20_account, mvo()("token_contract", token_account)("to", "alice"_n)("quantity", make_asset(200, usdt_symbol))("memo", "hello7"));
 
     produce_block();
 }
@@ -195,8 +213,8 @@ try {
 
     // Give erc20 some fund
     // 1 EOS = 10000
-    transfer_token(token_account, "alice"_n, evmtok_account, make_asset(10000, usdt_symbol), "0x0000000000000000000000000000000000000000");
-    BOOST_REQUIRE(10000 == get_balance(evmtok_account, token_account, symbol::from_string("4,USDT")).get_amount());
+    transfer_token(token_account, "alice"_n, evmin_account, make_asset(10000, usdt_symbol), "0x0000000000000000000000000000000000000000");
+    BOOST_REQUIRE(10000 == get_balance(erc20_account, token_account, symbol::from_string("4,USDT")).get_amount());
     produce_block();
     // reserved addr for bob
     // TODO: include silkworm and call function to generate it.
@@ -206,7 +224,7 @@ try {
     // 5000 /1000000 = 0.005 USDT = 50
     gen_bridgemessage(bob, 5000);
 
-    BOOST_REQUIRE(10000 - 50 == get_balance(evmtok_account, token_account, symbol::from_string("4,USDT")).get_amount());
+    BOOST_REQUIRE(10000 - 50 == get_balance(erc20_account, token_account, symbol::from_string("4,USDT")).get_amount());
 
     BOOST_REQUIRE(50 == get_balance("bob"_n, token_account, symbol::from_string("4,USDT")).get_amount());
 }
@@ -215,13 +233,13 @@ FC_LOG_AND_RETHROW()
 BOOST_FIXTURE_TEST_CASE(set_egress_fee, transfer_tester)
 try {
 
-    BOOST_REQUIRE_EXCEPTION(push_action(evmtok_account, "setegressfee"_n, evmtok_account, 
+    BOOST_REQUIRE_EXCEPTION(push_action(erc20_account, "setegressfee"_n, erc20_account, 
         mvo()("token_contract", token_account)("token_symbol_code", "USDT")("egress_fee", make_asset(50))),
         eosio_assert_message_exception, eosio_assert_message_is("egress fee must be at least as large as the receiver's minimum fee"));
 
     produce_block();
 
-    auto trace = push_action(evmtok_account, "setegressfee"_n, evmtok_account, 
+    auto trace = push_action(erc20_account, "setegressfee"_n, erc20_account, 
         mvo()("token_contract", token_account)("token_symbol_code", "USDT")("egress_fee", make_asset(5000)));
     BOOST_REQUIRE(trace->action_traces.back().receiver == evm_account);
     BOOST_REQUIRE(trace->action_traces.back().act.account == evm_account);
@@ -229,9 +247,9 @@ try {
 
     produce_block();
    
-    BOOST_REQUIRE_EXCEPTION(push_action(evmtok_account, "setegressfee"_n, evm_account, 
+    BOOST_REQUIRE_EXCEPTION(push_action(erc20_account, "setegressfee"_n, evm_account, 
         mvo()("token_contract", token_account)("token_symbol_code", "USDT")("egress_fee", make_asset(1000))),
-        missing_auth_exception, eosio::testing::fc_exception_message_starts_with("missing authority of eosio.evmtok"));
+        missing_auth_exception, eosio::testing::fc_exception_message_starts_with("missing authority of eosio.erc2o"));
 
 
     produce_block();
@@ -244,7 +262,7 @@ try {
 
     produce_block();
 
-    BOOST_REQUIRE_EXCEPTION(push_action(evmtok_account, "setegressfee"_n, evmtok_account, 
+    BOOST_REQUIRE_EXCEPTION(push_action(erc20_account, "setegressfee"_n, erc20_account, 
         mvo()("token_contract", token_account)("token_symbol_code", "USDT")("egress_fee", make_asset(2000))),
         unsatisfied_authorization, eosio::testing::fc_exception_message_contains("eosio.erc2o"));
 

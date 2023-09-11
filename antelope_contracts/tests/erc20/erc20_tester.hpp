@@ -113,6 +113,10 @@ constexpr uint64_t suggested_gas_price = 150'000'000'000;    // 150 gwei
 constexpr uint32_t suggested_miner_cut = 10'000;             // 10%
 constexpr uint64_t suggested_ingress_bridge_fee_amount = 70; // 0.0070 EOS
 
+extern const eosio::chain::name evm_account;
+extern const eosio::chain::name faucet_account_name;
+extern const eosio::chain::name erc20_account;
+extern const eosio::chain::name evmin_account;
 
 using namespace eosio;
 using namespace eosio::chain;
@@ -125,7 +129,6 @@ class erc20_tester : public eosio::testing::base_tester {
    static constexpr eosio::chain::name evm_account = "eosio.evm"_n;
    static constexpr eosio::chain::name faucet_account_name = "eosio.faucet"_n;
    static constexpr eosio::chain::name erc20_account = "eosio.erc2o"_n;
-   static constexpr eosio::chain::name evmtok_account = "eosio.evmtok"_n;
    static constexpr eosio::chain::name eos_system_account = "eosio"_n;
    static constexpr eosio::chain::name eos_token_account = "eosio.token"_n;
 

@@ -20,7 +20,7 @@ list(APPEND SOURCES
     ${EXTERNAL_DIR}/silkworm/silkworm/core/rlp/decode.cpp
 )
 
-
+add_compile_definitions(ANTELOPE)
 add_contract( erc20 erc20 ${SOURCES} )
 target_include_directories( erc20 PUBLIC 
                             ${CMAKE_CURRENT_SOURCE_DIR}/include 

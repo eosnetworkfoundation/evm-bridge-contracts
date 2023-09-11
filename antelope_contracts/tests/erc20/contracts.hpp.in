@@ -35,6 +35,7 @@ struct contracts {
 
     static std::vector<uint8_t> evm_wasm() { return read_wasm("${eosevm_DIR}/evm_runtime/evm_runtime.wasm"); }
     static std::vector<char> evm_abi() { return read_abi("${eosevm_DIR}/evm_runtime/evm_runtime.abi"); }
+    static std::vector<uint8_t> evm_depoit_proxy_wasm() { return read_wasm("${ANTELOPE_CONTRACTS_BINARY_DIR}/deposit_proxy/deposit_proxy.wasm"); }
 };
 }  // namespace testing
 }  // namespace eosio
