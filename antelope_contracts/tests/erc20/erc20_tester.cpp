@@ -163,7 +163,7 @@ erc20_tester::erc20_tester(bool use_real_evm, std::string native_symbol_str) : n
                 token_account,
                 mvo()("to", faucet_account_name)("quantity", asset(1'000'000'000'0000, symbol::from_string("4,USDT")))("memo", ""));
 
-    set_code(evmin_account, testing::contracts::evm_depoit_proxy_wasm());
+    set_code(evmin_account, testing::contracts::evm_deposit_proxy_wasm());
 
     produce_block();
 
