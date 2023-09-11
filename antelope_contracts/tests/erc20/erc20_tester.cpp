@@ -302,24 +302,6 @@ transaction_trace_ptr erc20_tester::push_action(const account_name& code,
     FC_CAPTURE_AND_RETHROW((code)(acttype)(auths)(data)(expiration)(delay_sec))
 }
 
-std::string erc20_tester::getSolidityContractAddress() {
-    auto& db = const_cast<chainbase::database&>(control->db());
-
-    const auto* existing_tid = db.find<table_id_object, by_code_scope_table>(
-        boost::make_tuple(erc20_account, erc20_account, "tokens"_n));
-    if (!existing_tid) {
-        return {};
-    }
-    const auto* kv_obj = db.find<chain::key_value_object, chain::by_scope_primary>(
-        boost::make_tuple(existing_tid->id, 0));
-
-    auto r = fc::raw::unpack<token_t>(
-        kv_obj->value.data(),
-        kv_obj->value.size());
-
-    return vec_to_hex(r.address, true);
-}
-
 transaction_trace_ptr erc20_tester::pushtx(const silkworm::Transaction& trx, name miner)
 {
    silkworm::Bytes rlp;

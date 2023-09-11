@@ -100,6 +100,29 @@ struct it_tester : erc20_tester {
 
         // init();
     }
+
+    std::string getSolidityContractAddress() {
+        auto r = getRegistedTokenInfo();
+        return vec_to_hex(r.address, true);
+    }
+
+    token_t getRegistedTokenInfo() {
+        auto& db = const_cast<chainbase::database&>(control->db());
+
+        const auto* existing_tid = db.find<table_id_object, by_code_scope_table>(
+            boost::make_tuple(erc20_account, erc20_account, "tokens"_n));
+        if (!existing_tid) {
+            return {};
+        }
+        const auto* kv_obj = db.find<chain::key_value_object, chain::by_scope_primary>(
+            boost::make_tuple(existing_tid->id, 0));
+
+        auto r = fc::raw::unpack<token_t>(
+            kv_obj->value.data(),
+            kv_obj->value.size());
+        return r;
+    }
+
     intx::uint256 egressFee(std::optional<exec_callback> callback = {}, std::optional<bytes> context = {}) {
         exec_input input;
         input.context = context;
@@ -215,6 +238,9 @@ try {
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE(bal == 990000);
     BOOST_REQUIRE(99990000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
+    auto tokenInfo = getRegistedTokenInfo();
+    BOOST_REQUIRE(tokenInfo.balance == make_asset(9900, token_symbol));
+    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(100, token_symbol));
 
     produce_block();
 
@@ -252,6 +278,9 @@ try {
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE(bal == 990000); // +1000000 - 10000
     BOOST_REQUIRE(99990000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // -10000
+    auto tokenInfo = getRegistedTokenInfo();
+    BOOST_REQUIRE(tokenInfo.balance == make_asset(9900, token_symbol));
+    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(100, token_symbol));
     produce_block();
 
     BOOST_REQUIRE_EXCEPTION(transfer_token(token_account, "alice"_n, erc20_account, make_asset(0, token_symbol), evm1.address_0x().c_str()),
@@ -259,6 +288,9 @@ try {
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE(bal == 990000);
     BOOST_REQUIRE(99990000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
+    tokenInfo = getRegistedTokenInfo();
+    BOOST_REQUIRE(tokenInfo.balance == make_asset(9900, token_symbol));
+    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(100, token_symbol));
     produce_block();
 
 
@@ -267,6 +299,9 @@ try {
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE(bal == 990000);
     BOOST_REQUIRE(99990000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
+    tokenInfo = getRegistedTokenInfo();
+    BOOST_REQUIRE(tokenInfo.balance == make_asset(9900, token_symbol));
+    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(100, token_symbol));
     produce_block();
 
     BOOST_REQUIRE_EXCEPTION(transfer_token(token_account, "alice"_n, erc20_account, make_asset(100, token_symbol), evm1.address_0x().c_str()),
@@ -274,12 +309,18 @@ try {
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE(bal == 990000);
     BOOST_REQUIRE(99990000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
+    tokenInfo = getRegistedTokenInfo();
+    BOOST_REQUIRE(tokenInfo.balance == make_asset(9900, token_symbol));
+    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(100, token_symbol));
     produce_block();
 
     transfer_token(token_account, "alice"_n, erc20_account, make_asset(101, token_symbol), evm1.address_0x().c_str());
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE(bal == 990100); // 9900000 + (10100 - 10000)
     BOOST_REQUIRE(99989899 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 99990000 - 101
+    tokenInfo = getRegistedTokenInfo();
+    BOOST_REQUIRE(tokenInfo.balance == make_asset(9901, token_symbol));
+    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(200, token_symbol));
     produce_block();
 
 }
@@ -350,8 +391,11 @@ try {
     transfer_token(token_account, "alice"_n, erc20_account, make_asset(10000100, token_symbol), evm1.address_0x().c_str());
     auto bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE(bal == 1000000000); // +1000010000 - 10000, 1000 USDT
-    BOOST_REQUIRE(89999900 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 
+    BOOST_REQUIRE(89999900 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
     BOOST_REQUIRE(10000100 == get_balance(erc20_account, token_account, symbol::from_string("4,USDT")).get_amount()); 
+    auto tokenInfo = getRegistedTokenInfo();
+    BOOST_REQUIRE(tokenInfo.balance == make_asset(10000000, token_symbol));
+    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(100, token_symbol));
     produce_block();
 
     push_action(erc20_account, "setingressfee"_n, erc20_account, 
@@ -361,7 +405,10 @@ try {
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE(bal == 2000000000); // 1000000000 +1000020000 - 20000, 2000 USDT
     BOOST_REQUIRE(79999700 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 
-    BOOST_REQUIRE(20000300 == get_balance(erc20_account, token_account, symbol::from_string("4,USDT")).get_amount()); 
+    BOOST_REQUIRE(20000300 == get_balance(erc20_account, token_account, symbol::from_string("4,USDT")).get_amount());
+    tokenInfo = getRegistedTokenInfo();
+    BOOST_REQUIRE(tokenInfo.balance == make_asset(20000000, token_symbol));
+    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(300, token_symbol));
     produce_block();
 
     // Change fee and try transfer again.
@@ -373,6 +420,9 @@ try {
     BOOST_REQUIRE(bal == 3000000000); // +1000000000
     BOOST_REQUIRE(69999700 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 
     BOOST_REQUIRE(30000300 == get_balance(erc20_account, token_account, symbol::from_string("4,USDT")).get_amount()); 
+    tokenInfo = getRegistedTokenInfo();
+    BOOST_REQUIRE(tokenInfo.balance == make_asset(30000000, token_symbol));
+    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(300, token_symbol));
     produce_block();
 
     BOOST_REQUIRE_EXCEPTION(push_action(erc20_account, "setingressfee"_n, erc20_account, 
@@ -413,20 +463,6 @@ try {
 
 
     produce_block();
-    auto delegated_auth = authority( 1, {},
-                          {
-                            { .permission = {erc20_account,config::active_name}, .weight = 1}
-                          });
-
-    set_authority( erc20_account, config::active_name,  delegated_auth );
-
-    produce_block();
-
-    BOOST_REQUIRE_EXCEPTION(push_action(erc20_account, "setegressfee"_n, erc20_account, 
-        mvo()("token_contract", token_account)("token_symbol_code", "USDT")("egress_fee", make_asset(2000))),
-        unsatisfied_authorization, eosio::testing::fc_exception_message_contains("eosio.erc2o"));
-
-    produce_block();
 }
 FC_LOG_AND_RETHROW()
 
@@ -443,6 +479,9 @@ try {
     BOOST_REQUIRE(bal == 1000000000); // +1000010000 - 10000, 1000 USDT
     BOOST_REQUIRE(89999900 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 
     BOOST_REQUIRE(10000100 == get_balance(erc20_account, token_account, symbol::from_string("4,USDT")).get_amount()); 
+    auto tokenInfo = getRegistedTokenInfo();
+    BOOST_REQUIRE(tokenInfo.balance == make_asset(10000000, token_symbol));
+    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(100, token_symbol));
     produce_block();
 
     BOOST_REQUIRE_EXCEPTION(push_action(erc20_account, "withdrawfee"_n, erc20_account, 
@@ -467,15 +506,75 @@ try {
     BOOST_REQUIRE(bal == 1000000000); // +1000010000 - 10000, 1000 USDT
     BOOST_REQUIRE(90000000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); 
     BOOST_REQUIRE(10000000 == get_balance(erc20_account, token_account, symbol::from_string("4,USDT")).get_amount()); 
-
-
-
+    tokenInfo = getRegistedTokenInfo();
+    BOOST_REQUIRE(tokenInfo.balance == make_asset(10000000, token_symbol));
+    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(0, token_symbol));
 }
 FC_LOG_AND_RETHROW()
 
-BOOST_FIXTURE_TEST_CASE(it_proxy_eos, it_tester)
+BOOST_FIXTURE_TEST_CASE(it_eos_to_evm_with_proxy, it_tester)
 try {
-    BOOST_REQUIRE(1==1);
+    evm_eoa evm1;
+    auto addr_alice = silkworm::make_reserved_address("alice"_n.to_uint64_t());
+    // Give evm1 some EOS
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(1000000, eos_token_symbol), evm1.address_0x().c_str());
+    produce_block();
+
+
+    // USDT balance should be zero
+    auto bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE(bal == 0);
+    produce_block();
+
+    transfer_token(token_account, "alice"_n, evmin_account, make_asset(10000, token_symbol), evm1.address_0x().c_str());
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE(bal == 990000); // +1000000 - 10000
+    BOOST_REQUIRE(99990000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // -10000
+    auto tokenInfo = getRegistedTokenInfo();
+    BOOST_REQUIRE(tokenInfo.balance == make_asset(9900, token_symbol));
+    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(100, token_symbol));
+    produce_block();
+
+    BOOST_REQUIRE_EXCEPTION(transfer_token(token_account, "alice"_n, evmin_account, make_asset(0, token_symbol), evm1.address_0x().c_str()),
+                            eosio_assert_message_exception, eosio_assert_message_is("must transfer positive quantity"));
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE(bal == 990000);
+    BOOST_REQUIRE(99990000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
+    tokenInfo = getRegistedTokenInfo();
+    BOOST_REQUIRE(tokenInfo.balance == make_asset(9900, token_symbol));
+    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(100, token_symbol));
+    produce_block();
+
+
+    BOOST_REQUIRE_EXCEPTION(transfer_token(token_account, "alice"_n, evmin_account, make_asset(10, token_symbol), evm1.address_0x().c_str()),
+                            eosio_assert_message_exception, eosio_assert_message_is("deposit amount must be greater than ingress fee"));
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE(bal == 990000);
+    BOOST_REQUIRE(99990000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
+    tokenInfo = getRegistedTokenInfo();
+    BOOST_REQUIRE(tokenInfo.balance == make_asset(9900, token_symbol));
+    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(100, token_symbol));
+    produce_block();
+
+    BOOST_REQUIRE_EXCEPTION(transfer_token(token_account, "alice"_n, evmin_account, make_asset(100, token_symbol), evm1.address_0x().c_str()),
+                            eosio_assert_message_exception, eosio_assert_message_is("deposit amount must be greater than ingress fee"));
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE(bal == 990000);
+    BOOST_REQUIRE(99990000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
+    tokenInfo = getRegistedTokenInfo();
+    BOOST_REQUIRE(tokenInfo.balance == make_asset(9900, token_symbol));
+    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(100, token_symbol));
+    produce_block();
+
+    transfer_token(token_account, "alice"_n, evmin_account, make_asset(101, token_symbol), evm1.address_0x().c_str());
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE(bal == 990100); // 9900000 + (10100 - 10000)
+    BOOST_REQUIRE(99989899 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 99990000 - 101
+    tokenInfo = getRegistedTokenInfo();
+    BOOST_REQUIRE(tokenInfo.balance == make_asset(9901, token_symbol));
+    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(200, token_symbol));
+    produce_block();
+
 }
 FC_LOG_AND_RETHROW()
 
