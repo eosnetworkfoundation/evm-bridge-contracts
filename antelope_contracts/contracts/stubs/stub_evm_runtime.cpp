@@ -28,6 +28,7 @@ class [[eosio::contract]] stub_evm_runtime : public contract {
    [[eosio::action]] void init();
     [[eosio::action]] void call(eosio::name from, const bytes& to, uint128_t value, const bytes& data, uint64_t gas_limit);
     [[eosio::action]] void sendbridgemsg(const bridge_message_t &message);
+    [[eosio::action]] void assertnonce(eosio::name account, uint64_t next_nonce);
 
     struct [[eosio::table]] [[eosio::contract("stub_evm_runtime")]] message_receiver {
 
@@ -80,6 +81,10 @@ void stub_evm_runtime::call(eosio::name from, const bytes& to, uint128_t value, 
 void stub_evm_runtime::sendbridgemsg(const bridge_message_t &message) {
     onbridgemsg_action onbridgemsg_act(eosio::name("eosio.erc2o"), {{get_self(), "active"_n}});
     onbridgemsg_act.send(message);
+}
+
+void stub_evm_runtime::assertnonce(eosio::name account, uint64_t next_nonce) {
+    return;
 }
 
 }  // namespace stub

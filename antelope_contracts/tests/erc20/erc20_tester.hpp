@@ -5,17 +5,114 @@
 #include <eosio/chain/abi_serializer.hpp>
 #include <eosio/chain/fixed_bytes.hpp>
 #include <eosio/testing/tester.hpp>
+#include <fc/crypto/hex.hpp>
+#include <fc/crypto/rand.hpp>
+#include <fc/variant_object.hpp>
+#include <fc/io/raw.hpp>
 #include <intx/intx.hpp>
 #include <optional>
+
+#include <silkworm/core/types/transaction.hpp>
+#include <silkworm/core/rlp/encode.hpp>
+#include <silkworm/core/common/util.hpp>
+#include <silkworm/core/execution/address.hpp>
+
+#include <secp256k1.h>
+#include <secp256k1_recovery.h>
+
+#include <silkworm/core/common/util.hpp>
+
+namespace intx {
+
+inline std::ostream& operator<<(std::ostream& ds, const intx::uint256& num)
+{
+   ds << intx::to_string(num, 10);
+   return ds;
+}
+
+} // namespace intx
+
+namespace fc {
+
+void to_variant(const intx::uint256& o, fc::variant& v);
+void to_variant(const evmc::address& o, fc::variant& v);
+} // namespace fc
 
 namespace erc20_test {
 
 typedef std::vector<char> bytes;
 
-extern const eosio::chain::name eos_token_account;
+struct exec_input {
+   std::optional<bytes> context;
+   std::optional<bytes> from;
+   bytes                to;
+   bytes                data;
+   std::optional<bytes> value;
+};
+
+struct exec_callback {
+   eosio::chain::name contract;
+   eosio::chain::name action;
+};
+
+struct exec_output {
+   int32_t              status;
+   bytes                data;
+   std::optional<bytes> context;
+};
+
+struct token_t {
+        uint64_t id = 0;
+        eosio::chain::name token_contract;
+        bytes address;  // <-- proxy contract addr
+        eosio::chain::asset ingress_fee;
+        eosio::chain::asset balance;  // <-- total amount in EVM side
+        eosio::chain::asset fee_balance;
+        uint8_t erc20_precision = 0;
+
+    };
+
+} // namespace erc20_test
+
+FC_REFLECT(erc20_test::exec_input, (context)(from)(to)(data)(value))
+FC_REFLECT(erc20_test::exec_callback, (contract)(action))
+FC_REFLECT(erc20_test::exec_output, (status)(data)(context))
+FC_REFLECT(erc20_test::token_t, (id)(token_contract)(address)(ingress_fee)(balance)(fee_balance)(erc20_precision))
+
+namespace erc20_test {
 extern const eosio::chain::symbol eos_token_symbol;
-extern const eosio::chain::name token_account;
 extern const eosio::chain::symbol token_symbol;
+
+class evm_eoa
+{
+public:
+   explicit evm_eoa(std::basic_string<uint8_t> optional_private_key = {});
+
+   std::string address_0x() const;
+
+   eosio::chain::key256_t address_key256() const;
+
+   void sign(silkworm::Transaction& trx);
+   void sign(silkworm::Transaction& trx, std::optional<uint64_t> chain_id);
+
+   ~evm_eoa();
+
+   evmc::address address;
+   uint64_t next_nonce = 0;
+
+private:
+   secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
+   std::array<uint8_t, 32> private_key;
+   std::basic_string<uint8_t> public_key;
+};
+
+constexpr uint64_t evm_chain_id = 15555;
+
+   // Sensible values for fee parameters passed into init:
+constexpr uint64_t suggested_gas_price = 150'000'000'000;    // 150 gwei
+constexpr uint32_t suggested_miner_cut = 10'000;             // 10%
+constexpr uint64_t suggested_ingress_bridge_fee_amount = 70; // 0.0070 EOS
+
 extern const eosio::chain::name evm_account;
 extern const eosio::chain::name faucet_account_name;
 extern const eosio::chain::name erc20_account;
@@ -26,13 +123,43 @@ using namespace eosio::chain;
 
 class erc20_tester : public eosio::testing::base_tester {
    public:
+   using testing::base_tester::push_action;
+
+   static constexpr eosio::chain::name token_account = "tethertether"_n;
+   static constexpr eosio::chain::name evm_account = "eosio.evm"_n;
+   static constexpr eosio::chain::name faucet_account_name = "eosio.faucet"_n;
+   static constexpr eosio::chain::name erc20_account = "eosio.erc2o"_n;
+   static constexpr eosio::chain::name eos_system_account = "eosio"_n;
+   static constexpr eosio::chain::name eos_token_account = "eosio.token"_n;
+
     const eosio::chain::symbol native_symbol;
-    explicit erc20_tester(std::string native_symbol_str = "4,EOS");
+    explicit erc20_tester(bool use_real_evm = false, std::string native_symbol_str = "4,EOS");
 
     eosio::chain::asset make_asset(int64_t amount) const { return eosio::chain::asset(amount, native_symbol); }
     eosio::chain::asset make_asset(int64_t amount, const eosio::chain::symbol& target_symbol) const { return eosio::chain::asset(amount, target_symbol); }
     eosio::chain::transaction_trace_ptr transfer_token(eosio::chain::name token_account_name, eosio::chain::name from, eosio::chain::name to, eosio::chain::asset quantity, std::string memo = "");
+    void prepare_self_balance(uint64_t fund_amount = 100'0000);
+    transaction_trace_ptr bridgereg(eosio::chain::name receiver, eosio::chain::name handler, eosio::chain::asset min_fee, vector<account_name> extra_signers={evm_account});
+    void open(name owner);
+    transaction_trace_ptr exec(const exec_input& input, const std::optional<exec_callback>& callback);
+    eosio::chain::action get_action( account_name code, action_name acttype, std::vector<permission_level> auths,
+                                 const bytes& data )const;
 
+    transaction_trace_ptr push_action( const account_name& code,
+                                      const action_name& acttype,
+                                      const account_name& actor,
+                                      const bytes& data,
+                                      uint32_t expiration = DEFAULT_EXPIRATION_DELTA,
+                                      uint32_t delay_sec = 0 );
+    
+    silkworm::Transaction
+    generate_tx(const evmc::address& to, const intx::uint256& value, uint64_t gas_limit = 21000) const;
+    silkworm::Transaction
+    prepare_deploy_contract_tx(const unsigned char* contract, size_t size, uint64_t gas_limit) const;
+    transaction_trace_ptr pushtx(const silkworm::Transaction& trx, name miner = evm_account);
+
+    std::string getSolidityContractAddress();
+  
     eosio::chain::abi_serializer abi_ser;
     eosio::chain::abi_serializer token_abi_ser;
 
@@ -55,7 +182,16 @@ class erc20_tester : public eosio::testing::base_tester {
     signed_block_ptr finish_block()override {
         return _finish_block();
     }
+
+    void init_evm(const uint64_t chainid = evm_chain_id,
+             const uint64_t gas_price = suggested_gas_price,
+             const uint32_t miner_cut = suggested_miner_cut,
+             const std::optional<asset> ingress_bridge_fee = std::nullopt,
+             const bool also_prepare_self_balance = true);
+
+   
 };
+
 
 // Hex helper functions:
 // Copied from EVMC: Ethereum Client-VM Connector API.
@@ -116,6 +252,21 @@ inline std::optional<bytes> from_hex(std::string_view hex) {
     if (!from_hex(hex.begin(), hex.end(), std::back_inserter(bs)))
         return {};
     return bs;
+}
+
+inline std::string vec_to_hex(bytes byte_array, bool with_prefix) {
+    static const char* kHexDigits{"0123456789abcdef"};
+    std::string out(byte_array.size() * 2 + (with_prefix ? 2 : 0), '\0');
+    char* dest{&out[0]};
+    if (with_prefix) {
+        *dest++ = '0';
+        *dest++ = 'x';
+    }
+    for (const auto& b : byte_array) {
+        *dest++ = kHexDigits[(uint8_t)b >> 4];    // Hi
+        *dest++ = kHexDigits[(uint8_t)b & 0x0f];  // Lo
+    }
+    return out;
 }
 
 }  // namespace erc20_test
