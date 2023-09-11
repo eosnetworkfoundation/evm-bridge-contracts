@@ -116,7 +116,7 @@ evm_eoa::~evm_eoa() { secp256k1_context_destroy(ctx); }
 
 erc20_tester::erc20_tester(bool use_real_evm, std::string native_symbol_str) : native_symbol(symbol::from_string(native_symbol_str)) {
     auto def_conf = default_config(tempdir);
-    def_conf.first.max_nonprivileged_inline_action_size = 256 * 1024;
+
     cfg = def_conf.first;
     init(def_conf.first, def_conf.second);
 
