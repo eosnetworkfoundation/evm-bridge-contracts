@@ -154,6 +154,8 @@ class erc20_tester : public eosio::testing::base_tester {
     
     silkworm::Transaction
     generate_tx(const evmc::address& to, const intx::uint256& value, uint64_t gas_limit = 21000) const;
+    silkworm::Transaction
+    prepare_deploy_contract_tx(const unsigned char* contract, size_t size, uint64_t gas_limit) const;
     transaction_trace_ptr pushtx(const silkworm::Transaction& trx, name miner = evm_account);
 
     std::string getSolidityContractAddress();

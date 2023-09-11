@@ -12,6 +12,7 @@ include_directories(
     ${EXTERNAL_DIR}/silkworm/third_party/evmone/evmc/include
     ${EXTERNAL_DIR}/silkworm/third_party/secp256k1/include
     ${EXTERNAL_DIR}/expected/include
+    ${SOLIDITY_BYTECODES_DIR}/
 )
 
 add_eosio_test_executable( unit_test

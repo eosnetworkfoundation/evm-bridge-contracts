@@ -12,7 +12,7 @@
 #include <fc/variant_object.hpp>
 #include <intx/intx.hpp>
 
-
+#include <erc20/bytecode.hpp>
 
 #include <optional>
 
@@ -201,8 +201,20 @@ erc20_tester::erc20_tester(bool use_real_evm, std::string native_symbol_str) : n
 
     produce_block();
 
-    // ./cleos push action eosio.erc2o init '[0]' -p eosio.erc2o
-    push_action(erc20_account, "upgrade"_n, erc20_account, mvo());
+    evm_eoa deployer;
+    evmc::address impl_addr = silkworm::create_address(deployer.address, deployer.next_nonce); 
+
+    if (use_real_evm) {
+        transfer_token(eos_token_account, faucet_account_name, evmin_account, make_asset(1000000, eos_token_symbol), deployer.address_0x().c_str());
+
+        auto txn = prepare_deploy_contract_tx(solidity::erc20::bytecode, sizeof(solidity::erc20::bytecode), 10'000'000);
+
+        deployer.sign(txn);
+        pushtx(txn);
+        produce_block();
+    }
+
+    push_action(erc20_account, "upgradeto"_n, erc20_account, mvo()("impl_address",fc::variant(impl_addr).as_string()));
 
     produce_block();
 
@@ -326,6 +338,21 @@ erc20_tester::generate_tx(const evmc::address& to, const intx::uint256& value, u
       r.to = to;
       r.value = value;
    return r;
+}
+
+silkworm::Transaction
+erc20_tester::prepare_deploy_contract_tx(const unsigned char* contract, size_t size, uint64_t gas_limit) const
+{
+    silkworm::Transaction r;
+
+    r.type = silkworm::TransactionType::kLegacy;
+    r.max_priority_fee_per_gas = suggested_gas_price;
+    r.max_fee_per_gas = suggested_gas_price;
+    r.gas_limit = gas_limit;
+    r.value = 0;
+    r.data.resize(size);
+    memcpy(r.data.data(), contract, size);
+    return r;
 }
 
 }  // namespace erc20_test
