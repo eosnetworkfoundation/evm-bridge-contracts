@@ -1,5 +1,5 @@
 #include <eosio/symbol.hpp>
-#include <deposit_proxy.hpp>
+#include <deposit_proxy/deposit_proxy.hpp>
 
 void deposit_proxy::transfer(eosio::name from, eosio::name to, eosio::asset quantity, const std::string& memo) {
 

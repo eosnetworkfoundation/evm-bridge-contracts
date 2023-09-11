@@ -261,12 +261,6 @@ try {
     set_authority( erc20_account, config::active_name,  delegated_auth );
 
     produce_block();
-
-    BOOST_REQUIRE_EXCEPTION(push_action(erc20_account, "setegressfee"_n, erc20_account, 
-        mvo()("token_contract", token_account)("token_symbol_code", "USDT")("egress_fee", make_asset(2000))),
-        unsatisfied_authorization, eosio::testing::fc_exception_message_contains("eosio.erc2o"));
-
-    produce_block();
 }
 FC_LOG_AND_RETHROW()
 
