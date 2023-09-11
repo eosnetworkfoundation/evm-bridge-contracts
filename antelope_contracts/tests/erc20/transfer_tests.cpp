@@ -134,7 +134,7 @@ try {
                 mvo()("to", dummy_token_account)("quantity", asset(1'000'000'000'0000, eosio::chain::symbol{4,"EOS"}))("memo", ""));
 
     BOOST_REQUIRE_EXCEPTION(transfer_token(dummy_token_account, dummy_token_account, evmin_account, make_asset(10000), "0x0000000000000000000000000000000000000000"),
-                            eosio_assert_message_exception, eosio_assert_message_is("unregistered token"));
+                            eosio_assert_message_exception, eosio_assert_message_is("received unregistered token"));
 
     BOOST_REQUIRE_EXCEPTION(transfer_token(eos_token_account, "alice"_n, evmin_account, make_asset(10000), "0x000000000000000000000000000000000000000Z"),
                             eosio_assert_message_exception, eosio_assert_message_is("memo must be a valid EVM address"));
@@ -251,16 +251,6 @@ try {
         mvo()("token_contract", token_account)("token_symbol_code", "USDT")("egress_fee", make_asset(1000))),
         missing_auth_exception, eosio::testing::fc_exception_message_starts_with("missing authority of eosio.erc2o"));
 
-
-    produce_block();
-    auto delegated_auth = authority( 1, {},
-                          {
-                            { .permission = {erc20_account,config::active_name}, .weight = 1}
-                          });
-
-    set_authority( erc20_account, config::active_name,  delegated_auth );
-
-    produce_block();
 }
 FC_LOG_AND_RETHROW()
 
