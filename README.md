@@ -16,6 +16,8 @@ The `erc20` contracts (both within `solidity_contracts` and `antelope_contracts`
   + We chose to use solcjs because it is more actively maintained than the solc available from the package manager.
     * First install node.js and npm.
     * Then install solcjs: `npm install -g solc`
+  + Make sure to install version 0.8.21.
+    * Confirm with `solcjs --version`. You should get `0.8.21+commit.d9974bed.Emscripten.clang`
 - Install `jq` used to compile solidity contracts
   + `apt-get install jq`
 - Install `xxd` used to compile solidity contracts
