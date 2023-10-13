@@ -55,6 +55,8 @@ class [[eosio::contract]] erc20 : public contract {
     [[eosio::action]] void setingressfee(eosio::name token_contract, eosio::asset ingress_fee);
     [[eosio::action]] void withdrawfee(eosio::name token_contract, eosio::asset quantity, eosio::name to, std::string memo);
 
+    [[eosio::action]] void unregtoken(eosio::name eos_contract_name, eosio::symbol_code token_symbol_code);
+    
     struct [[eosio::table("implcontract")]] impl_contract_t {
         uint64_t id = 0;
         bytes address;

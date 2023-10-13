@@ -63,11 +63,11 @@ struct exec_output {
 
 struct token_t {
         uint64_t id = 0;
-        eosio::chain::name token_contract;
+        eosio::chain::name token_contract{};
         bytes address;  // <-- proxy contract addr
-        eosio::chain::asset ingress_fee;
-        eosio::chain::asset balance;  // <-- total amount in EVM side
-        eosio::chain::asset fee_balance;
+        eosio::chain::asset ingress_fee{};
+        eosio::chain::asset balance{};  // <-- total amount in EVM side
+        eosio::chain::asset fee_balance{};
         uint8_t erc20_precision = 0;
 
     };
