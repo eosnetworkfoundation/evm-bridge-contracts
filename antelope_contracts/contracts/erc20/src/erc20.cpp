@@ -424,6 +424,17 @@ void erc20::setegressfee(eosio::name token_contract, eosio::symbol_code token_sy
     call_act.send(receiver_account(), token_table_iter->address, value_zero, call_data, evm_gaslimit);
 }
 
+void erc20::unregtoken(eosio::name token_contract, eosio::symbol_code token_symbol_code) {
+    require_auth(get_self());
+
+    token_table_t token_table(_self, _self.value);
+    auto index_symbol = token_table.get_index<"by.symbol"_n>();
+    auto token_table_iter = index_symbol.find(token_symbol_key(token_contract, token_symbol_code));
+    eosio::check(token_table_iter != index_symbol.end(), "token not registered");
+
+    index_symbol.erase(token_table_iter);
+}
+
 inline eosio::name erc20::receiver_account()const {
     return get_self();
 }

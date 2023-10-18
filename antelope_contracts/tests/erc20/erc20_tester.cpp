@@ -270,7 +270,7 @@ void erc20_tester::open(name owner) { push_action(evm_account, "open"_n, owner, 
 
 transaction_trace_ptr erc20_tester::exec(const exec_input& input, const std::optional<exec_callback>& callback) {
     auto binary_data = fc::raw::pack<exec_input, std::optional<exec_callback>>(input, callback);
-    return erc20_tester::push_action(evm_account, "exec"_n, evm_account, bytes{binary_data.begin(), binary_data.end()});
+    return erc20_tester::push_action(evm_account, "exec"_n, evm_account, bytes{binary_data.begin(), binary_data.end()}, DEFAULT_EXPIRATION_DELTA + (exec_count++) % 3500);
 }
 
 eosio::chain::action erc20_tester::get_action(account_name code, action_name acttype, std::vector<permission_level> auths,
