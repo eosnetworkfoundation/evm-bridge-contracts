@@ -258,7 +258,51 @@ try {
 }
 FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE(it_unregtoken, it_tester)
+try {
+    evm_eoa evm1;
+    auto addr_alice = silkworm::make_reserved_address("alice"_n.to_uint64_t());
 
+    // Give evm1 some EOS
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(1000000, eos_token_symbol), evm1.address_0x().c_str());
+    produce_block();
+
+
+    // USDT balance should be zero
+    auto bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE(bal == 0);
+
+    produce_block();
+
+    // alice send 1.0000 USDT to evm1
+    transfer_token(token_account, "alice"_n, erc20_account, make_asset(10000, token_symbol), evm1.address_0x().c_str());
+
+    // evm1 has 0.990000 USDT
+    BOOST_REQUIRE(balanceOf(evm1.address_0x().c_str()) == 990000);
+
+    // alice has 9999.0000 USDT
+    BOOST_REQUIRE(9999'0000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
+
+    push_action(
+        erc20_account, "unregtoken"_n, erc20_account, mvo()("eos_contract_name", token_account)("token_symbol_code", (std::string)(token_symbol.name())));
+
+    BOOST_REQUIRE_EXCEPTION(
+        transfer_token(token_account, "alice"_n, erc20_account, make_asset(20000, token_symbol), evm1.address_0x().c_str()),
+        eosio_assert_message_exception, 
+        eosio_assert_message_is("received unregistered token"));
+
+    // register token again (imply a different ERC-EVM address)
+    push_action(erc20_account, "regtoken"_n, erc20_account, mvo()("eos_contract_name",token_account.to_string())("evm_token_name","EVM USDT V2")("evm_token_symbol","WUSDT")("ingress_fee","0.0100 USDT")("egress_fee","0.0100 EOS")("erc20_precision",6));
+
+    transfer_token(token_account, "alice"_n, erc20_account, make_asset(20000, token_symbol), evm1.address_0x().c_str());
+
+    // alice has 9997.0000 USDT
+    BOOST_REQUIRE(9997'0000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
+
+    // evm1 has 0.990000 USDT under the original ERC-20 address
+    BOOST_REQUIRE(balanceOf(evm1.address_0x().c_str()) == 990000);
+}
+FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(it_eos_to_evm, it_tester)
 try {
