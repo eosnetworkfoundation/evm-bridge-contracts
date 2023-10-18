@@ -63,11 +63,11 @@ struct exec_output {
 
 struct token_t {
         uint64_t id = 0;
-        eosio::chain::name token_contract;
+        eosio::chain::name token_contract{};
         bytes address;  // <-- proxy contract addr
-        eosio::chain::asset ingress_fee;
-        eosio::chain::asset balance;  // <-- total amount in EVM side
-        eosio::chain::asset fee_balance;
+        eosio::chain::asset ingress_fee{};
+        eosio::chain::asset balance{};  // <-- total amount in EVM side
+        eosio::chain::asset fee_balance{};
         uint8_t erc20_precision = 0;
 
     };
@@ -135,6 +135,8 @@ class erc20_tester : public eosio::testing::base_tester {
     const eosio::chain::symbol native_symbol;
     explicit erc20_tester(bool use_real_evm = false, std::string native_symbol_str = "4,EOS");
 
+    unsigned int exec_count = 0; // ensure uniqueness in exec
+
     eosio::chain::asset make_asset(int64_t amount) const { return eosio::chain::asset(amount, native_symbol); }
     eosio::chain::asset make_asset(int64_t amount, const eosio::chain::symbol& target_symbol) const { return eosio::chain::asset(amount, target_symbol); }
     eosio::chain::transaction_trace_ptr transfer_token(eosio::chain::name token_account_name, eosio::chain::name from, eosio::chain::name to, eosio::chain::asset quantity, std::string memo = "");
@@ -187,7 +189,6 @@ class erc20_tester : public eosio::testing::base_tester {
              const std::optional<asset> ingress_bridge_fee = std::nullopt,
              const bool also_prepare_self_balance = true);
 
-   
 };
 
 
