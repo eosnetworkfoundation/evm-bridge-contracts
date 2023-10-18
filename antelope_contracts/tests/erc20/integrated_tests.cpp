@@ -195,9 +195,17 @@ struct it_tester : erc20_tester {
         if (!memo.empty()) {
             txn.data += evmc::from_hex(data_str32(str_to_hex(memo))).value();  // memo
         }
+
+        auto old_nonce = from.next_nonce;
         from.sign(txn);
-        auto r = pushtx(txn);
-        // dlog("action trace: ${a}", ("a", r));
+
+        try {
+            auto r = pushtx(txn);
+            // dlog("action trace: ${a}", ("a", r));
+        } catch (...) {
+            from.next_nonce = old_nonce;
+            throw;
+        }
     }
 
     void transferERC20(evm_eoa& from, evmc::address& to, intx::uint256 amount) {
@@ -209,9 +217,16 @@ struct it_tester : erc20_tester {
         txn.data += evmc::from_hex(address_str32(to)).value();      // param1 (to: address)
         txn.data += evmc::from_hex(uint256_str32(amount)).value();  // param2 (amount: uint256)
 
+        auto old_nonce = from.next_nonce;
         from.sign(txn);
-        auto r = pushtx(txn);
-        // dlog("action trace: ${a}", ("a", r));
+
+        try {
+            auto r = pushtx(txn);
+            // dlog("action trace: ${a}", ("a", r));
+        } catch (...) {
+            from.next_nonce = old_nonce;
+            throw;
+        }
     }
 };
 
@@ -258,7 +273,76 @@ try {
 }
 FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE(it_unregtoken, it_tester)
+try {
+    evm_eoa evm1;
+    auto addr_alice = silkworm::make_reserved_address("alice"_n.to_uint64_t());
 
+    // Give evm1 some EOS
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(1000000, eos_token_symbol), evm1.address_0x().c_str());
+    produce_block();
+
+
+    // USDT balance should be zero
+    auto bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE(bal == 0);
+
+    produce_block();
+
+    // alice send 1.0000 USDT to evm1
+    transfer_token(token_account, "alice"_n, erc20_account, make_asset(10000, token_symbol), evm1.address_0x().c_str());
+
+    // evm1 has 0.990000 USDT
+    BOOST_REQUIRE(balanceOf(evm1.address_0x().c_str()) == 990000);
+
+    // alice has 9999.0000 USDT
+    BOOST_REQUIRE(9999'0000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
+
+    // unregtoken
+    push_action(
+        erc20_account, "unregtoken"_n, erc20_account, mvo()("eos_contract_name", token_account)("token_symbol_code", (std::string)(token_symbol.name())));
+
+    // EOS->EVM not allowed after unregtoken
+    BOOST_REQUIRE_EXCEPTION(
+        transfer_token(token_account, "alice"_n, erc20_account, make_asset(20000, token_symbol), evm1.address_0x().c_str()),
+        eosio_assert_message_exception, 
+        eosio_assert_message_is("received unregistered token"));
+
+    // EVM->EOS not allowed after unregtoken
+    auto fee = egressFee();
+    BOOST_REQUIRE_EXCEPTION(
+        bridgeTransferERC20(evm1, addr_alice, 10000, "aaa", fee),
+        eosio_assert_message_exception, 
+        eosio_assert_message_is("ERC-20 token not registerred"));
+
+    // register token again (imply a different ERC-EVM address)
+    push_action(erc20_account, "regtoken"_n, erc20_account, mvo()("eos_contract_name",token_account.to_string())("evm_token_name","EVM USDT V2")("evm_token_symbol","WUSDT")("ingress_fee","0.0100 USDT")("egress_fee","0.0100 EOS")("erc20_precision",6));
+
+    // EOS->EVM: alice transfer 2 USDT to evm1 in EVM (new ERC-EVM address)
+    transfer_token(token_account, "alice"_n, erc20_account, make_asset(20000, token_symbol), evm1.address_0x().c_str());
+
+    // alice has 9997.0000 USDT
+    BOOST_REQUIRE(9997'0000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
+
+    // evm1 has 0.990000 USDT under the original ERC-20 address
+    BOOST_REQUIRE(balanceOf(evm1.address_0x().c_str()) == 990000);
+
+    // refresh evm token address
+    evm_address = getSolidityContractAddress();
+
+    // evm1 has 1.990000 USDT under the new ERC-20 address
+    BOOST_REQUIRE(balanceOf(evm1.address_0x().c_str()) == 1990000);
+
+    // EVM->EOS: evm1 tranfer 0.010000 USDT to alice
+    bridgeTransferERC20(evm1, addr_alice, 10000, "aaa", fee);
+
+    // evm1 has 1.980000 USDT under the new ERC-20 address
+    BOOST_REQUIRE(balanceOf(evm1.address_0x().c_str()) == 1980000);    
+
+    // alice has 9997.0000 USDT
+    BOOST_REQUIRE(9997'0100 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
+}
+FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(it_eos_to_evm, it_tester)
 try {
@@ -351,14 +435,12 @@ try {
                 eosio_assert_message_exception, eosio_assert_message_is("bridge amount must be positive"));
     BOOST_REQUIRE(999999000 == balanceOf(evm1.address_0x().c_str()));
     BOOST_REQUIRE(89999910 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 
-    evm1.next_nonce --;
     produce_block();
 
     BOOST_REQUIRE_EXCEPTION(bridgeTransferERC20(evm1, addr_alice, 1, "aaa", fee), 
                 eosio_assert_message_exception, eosio_assert_message_is("bridge amount can not have dust"));
     BOOST_REQUIRE(999999000 == balanceOf(evm1.address_0x().c_str()));
     BOOST_REQUIRE(89999910 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 
-    evm1.next_nonce --;
     produce_block();
 
     bridgeTransferERC20(evm1, addr_alice, 100, "aaa", fee);
