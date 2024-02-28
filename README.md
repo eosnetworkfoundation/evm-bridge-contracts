@@ -6,10 +6,7 @@ The `erc20` contracts (both within `solidity_contracts` and `antelope_contracts`
 ## Dependencies
 
 - CMake 3.16 or later
-- [Leap](https://github.com/AntelopeIO/leap) 4.0 or later
-  + Currently there is an issue in the 4.0 release of Leap that causes test to fail to build with C++20 (which is necessary due to the silkworm dependency of the erc20 contract).
-  + To work around this issue, one option is to build Leap from the main branch of the [leap](https://github.com/AntelopeIO/leap) repo which has changes to support building Leap with C++20.
-  + An alternative workaround for this issue is to apply the fix mentioned in https://github.com/AntelopeIO/leap/issues/1497 to a copy of the [release/4.0](https://github.com/AntelopeIO/leap/tree/release/4.0) branch before building Leap. The branch [4.0-with-evm-fix](https://github.com/AntelopeIO/leap/tree/4.0-with-evm-fix) is also available with the fix already applied to a recent copy of the release/4.0 branch. 
+- [Leap](https://github.com/AntelopeIO/leap) 5.0 or later
 - [CDT](https://github.com/AntelopeIO/cdt) 4.0 or later
 - solc
   + Used to compile the .sol files. 
