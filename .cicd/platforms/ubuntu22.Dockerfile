@@ -8,9 +8,10 @@ RUN apt-get update && apt-get upgrade -y && \
                        g++-11               \
                        git                  \
                        jq                   \
+                       libcurl4-gnutls-dev  \
                        wget                 \
                        xxd                  \
-                       libcurl4-gnutls-dev  
+                       zstd
 
 #Install Node.js
 #https://github.com/nodesource/distributions/blob/master/README.md#installation-instructions
