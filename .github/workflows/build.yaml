@@ -135,12 +135,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [ ubuntu20 ]
+        platform: [ ubuntu22 ]
     runs-on: ubuntu-latest
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      DCMAKE_BUILD_TYPE: 'Release'
     container: ${{fromJSON(needs.d.outputs.p)[matrix.platform].image}}
 
     steps:
