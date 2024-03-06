@@ -172,7 +172,7 @@ jobs:
           
       - name: Install leap-dev.deb
         run: |
-          apt install -y ./leap*.deb
+          apt-get update && apt install -y ./leap*.deb
           rm ./leap*.deb
 
       - name: Download EOS EVM Contract
