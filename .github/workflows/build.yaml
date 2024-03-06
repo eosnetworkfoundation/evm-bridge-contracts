@@ -157,7 +157,7 @@ jobs:
           file: 'cdt_.*amd64.deb'
 
       - name: Install CDT
-        run: sudo apt-get install -y ./cdt*.deb
+        run: apt-get install -y ./cdt*.deb
 
       - name: Download Leap - dev binary
         uses: AntelopeIO/asset-artifact-download-action@v3
@@ -172,7 +172,7 @@ jobs:
           
       - name: Install leap-dev.deb
         run: |
-          sudo apt install -y ./leap*.deb
+          apt install -y ./leap*.deb
           rm ./leap*.deb
 
       - name: Download EOS EVM Contract
