@@ -135,7 +135,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [ ubuntu22 ]
+        platform: [ ubuntu20 ]
     runs-on: ubuntu-latest
     container: ${{fromJSON(needs.d.outputs.p)[matrix.platform].image}}
 
@@ -164,10 +164,10 @@ jobs:
         with:
           owner: AntelopeIO
           repo: leap
-          file: 'leap-dev_4.0.6-ubuntu22.04_amd64.deb'
+          file: 'leap-dev_4.0.6-ubuntu20.04_amd64.deb'
           target: ${{needs.versions.outputs.leap-dev-target}}
           prereleases: ${{fromJSON(needs.versions.outputs.leap-dev-prerelease)}}
-          artifact-name: leap-dev-ubuntu22-amd64
+          artifact-name: leap-dev-ubuntu20-amd64
           container-package: experimental-binaries
 
       - name: Install leap-dev.deb
