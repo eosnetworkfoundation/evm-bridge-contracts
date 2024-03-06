@@ -203,11 +203,16 @@ jobs:
       - name: Build EVM Bridge Contracts
         run: |
           pushd evm-bridge-contracts
-          mkdir build
-          pushd build
-          echo "eosevm_DIR=${{ steps.evm-contract.outputs.EVM_CONTRACT }}"
-          cmake -Deosevm_DIR=${{ steps.evm-contract.outputs.EVM_CONTRACT }} ..
-          make -j
+          cmake -B build -Deosevm_DIR=${{ steps.evm-contract.outputs.EVM_CONTRACT }}
+          cmake --build build -- -j
+          tar -pc build | zstd --long -T0 -9 > build.tar.zst
+
+      - name: Upload builddir
+        uses: actions/upload-artifact@v4
+        with:
+          name: builddir
+          path: evm-bridge-contracts/build.tar.zst
+          compression-level: 0
 
       - name: EVM Bridge Contracts Tests
         run: |
