@@ -170,10 +170,10 @@ jobs:
           artifact-name: leap-dev-ubuntu22-amd64
           container-package: experimental-binaries
 
-      - name: Install leap-dev.deb
+      - name: Install leap.deb
         run: |
-          apt install -y ./leap-dev*.deb
-          rm ./leap-dev*.deb
+          apt install -y ./leap*.deb
+          rm ./leap*.deb
 
       - name: Download EOS EVM Contract
         uses: AntelopeIO/asset-artifact-download-action@v3
