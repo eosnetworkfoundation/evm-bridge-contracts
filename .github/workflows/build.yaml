@@ -137,6 +137,10 @@ jobs:
       matrix:
         platform: [ ubuntu20 ]
     runs-on: ubuntu-latest
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      DCMAKE_BUILD_TYPE: 'Release'
     container: ${{fromJSON(needs.d.outputs.p)[matrix.platform].image}}
 
     steps:
@@ -201,9 +205,6 @@ jobs:
           pushd evm-bridge-contracts
           mkdir build
           pushd build
-          ls -ltr /usr/lib/x86_64-linux-gnu/cmake/
-          ls -ltr /usr/lib/x86_64-linux-gnu/cmake/leap/
-          ls -ltr /usr/lib/x86_64-linux-gnu/cmake/eosio/
           cmake -Dleap_DIR='/usr/lib/x86_64-linux-gnu/cmake/leap' -Deosevm_DIR=${{ steps.evm-contract.outputs.EVM_CONTRACT }} ..
           make -j
 
