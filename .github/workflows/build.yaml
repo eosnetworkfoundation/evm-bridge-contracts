@@ -164,7 +164,7 @@ jobs:
         with:
           owner: AntelopeIO
           repo: leap
-          file: 'leap-dev_4.0.6-ubuntu20.04_amd64.deb'
+          file: 'leap-dev.*(x86_64|amd64).deb'
           target: ${{needs.versions.outputs.leap-dev-target}}
           prereleases: ${{fromJSON(needs.versions.outputs.leap-dev-prerelease)}}
           artifact-name: leap-dev-ubuntu20-amd64
@@ -185,13 +185,6 @@ jobs:
           file: 'contract.tar.gz'
           artifact-name: contract.test-actions-off.tar.gz
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: install LLVM
-        id: install-llvm
-        run: |
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 11.0.0
 
       - name: Extract EOS EVM Contract
         id: evm-contract
