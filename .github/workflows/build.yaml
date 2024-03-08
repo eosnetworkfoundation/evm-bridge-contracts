@@ -159,21 +159,21 @@ jobs:
       - name: Install CDT
         run: apt-get install -y ./cdt*.deb
 
-      - name: Download leap-dev.deb
+      - name: Download Leap - dev binary
         uses: AntelopeIO/asset-artifact-download-action@v3
         with:
           owner: AntelopeIO
           repo: leap
-          file: 'leap-dev.*(x86_64|amd64).deb'
-          target: ${{needs.versions.outputs.leap-dev-target}}
-          prereleases: ${{fromJSON(needs.versions.outputs.leap-dev-prerelease)}}
-          artifact-name: leap-dev-ubuntu22-amd64
+          target: '^5.0.1'
+          prereleases: false
+          file: 'leap-dev.*ubuntu22\.04_amd64.deb'
           container-package: experimental-binaries
-
+          artifact-name: leap-dev-ubuntu22-amd64
+          
       - name: Install leap-dev.deb
         run: |
-          apt install -y ./leap-dev*.deb
-          rm ./leap-dev*.deb
+          apt-get update && apt-get install zstd && apt install -y ./leap*.deb
+          rm ./leap*.deb
 
       - name: Download EOS EVM Contract
         uses: AntelopeIO/asset-artifact-download-action@v3
@@ -199,10 +199,16 @@ jobs:
       - name: Build EVM Bridge Contracts
         run: |
           pushd evm-bridge-contracts
-          mkdir build
-          pushd build
-          cmake -Deosevm_DIR=${{ steps.evm-contract.outputs.EVM_CONTRACT }} ..
-          make -j
+          cmake -B build -Deosevm_DIR=${{ steps.evm-contract.outputs.EVM_CONTRACT }}
+          cmake --build build -- -j
+          tar -pc build | zstd --long -T0 -9 > build.tar.zst
+
+      - name: Upload builddir
+        uses: actions/upload-artifact@v4
+        with:
+          name: builddir
+          path: evm-bridge-contracts/build.tar.zst
+          compression-level: 0
 
       - name: EVM Bridge Contracts Tests
         run: |
