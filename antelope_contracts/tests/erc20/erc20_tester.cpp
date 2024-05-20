@@ -242,7 +242,7 @@ void erc20_tester::init_evm(const uint64_t chainid,
     if (ingress_bridge_fee.has_value()) {
         fee_params("ingress_bridge_fee", *ingress_bridge_fee);
     } else {
-        fee_params("ingress_bridge_fee", fc::variant());
+        fee_params("ingress_bridge_fee", "0.0000 EOS");
     }
 
     push_action(evm_account, "init"_n, evm_account, mvo()("chainid", chainid)("fee_params", fee_params));
