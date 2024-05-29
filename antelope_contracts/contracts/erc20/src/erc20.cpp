@@ -122,7 +122,7 @@ void erc20::upgradeto(std::string impl_address) {
 
     eosio::check(egress_fee.symbol == config.evm_gas_token_symbol, "egress_fee should have native token symbol");
     intx::uint256 egress_fee_evm = egress_fee.amount;
-    egress_fee_evm *= get_minimum_natively_representable();
+    egress_fee_evm *= get_minimum_natively_representable(config);
 
     token_table_t token_table(_self, _self.value);
     auto index_symbol = token_table.get_index<"by.symbol"_n>();
@@ -414,7 +414,7 @@ void erc20::setegressfee(eosio::name token_contract, eosio::symbol_code token_sy
     eosio::check(egress_fee >= message_receivers_iter->min_fee, "egress fee must be at least as large as the receiver's minimum fee");
     
     intx::uint256 egress_fee_evm = egress_fee.amount;
-    egress_fee_evm *= get_minimum_natively_representable();
+    egress_fee_evm *= get_minimum_natively_representable(config);
 
     auto pack_uint256 = [&](bytes &ds, const intx::uint256 &val) {
         uint8_t val_[32] = {};
@@ -446,12 +446,28 @@ void erc20::unregtoken(eosio::name token_contract, eosio::symbol_code token_symb
     index_symbol.erase(token_table_iter);
 }
 
-void erc20::setconfig(std::optional<eosio::name> evm_account, std::optional<eosio::symbol> gas_token_symbol, std::optional<uint64_t> gaslimit, std::optional<uint64_t> init_gaslimit) {
+void erc20::init(eosio::name evm_account, eosio::symbol gas_token_symbol, uint64_t gaslimit, uint64_t init_gaslimit) {
+    require_auth(get_self());
+
+    config_singleton_t config_table(get_self(), get_self().value);
+    eosio::check(!config_table.exists(), "erc20 config already initialized");
+
+    config_t config;
+    token_table_t token_table(_self, _self.value);
+    if (token_table.begin() != token_table.end()) {
+        eosio::check(evm_account == default_evm_account && gas_token_symbol == default_native_token_symbol, "can only init with native EOS symbol");
+    }
+    config.evm_account = evm_account;
+    config.evm_gas_token_symbol = gas_token_symbol;
+    config.evm_gaslimit = gaslimit;
+    config.evm_init_gaslimit = init_gaslimit;
+    set_config(config);
+}
+
+void erc20::setgaslimit(std::optional<uint64_t> gaslimit, std::optional<uint64_t> init_gaslimit) {
     require_auth(get_self());
 
     config_t config = get_config();
-    if (evm_account.has_value()) config.evm_account = *evm_account;
-    if (gas_token_symbol.has_value()) config.evm_gas_token_symbol = *gas_token_symbol;
     if (gaslimit.has_value()) config.evm_gaslimit = *gaslimit;
     if (init_gaslimit.has_value()) config.evm_init_gaslimit = *init_gaslimit;
     set_config(config);
