@@ -114,7 +114,7 @@ evm_eoa::~evm_eoa() { secp256k1_context_destroy(ctx); }
 
 
 
-erc20_tester::erc20_tester(bool use_real_evm, std::string native_symbol_str) : native_symbol(symbol::from_string(native_symbol_str)) {
+erc20_tester::erc20_tester(bool use_real_evm, eosio::chain::name evm_account_, std::string native_symbol_str) : evm_account(evm_account_), native_symbol(symbol::from_string(native_symbol_str)) {
     auto def_conf = default_config(tempdir, 4096);
 
     cfg = def_conf.first;
@@ -171,6 +171,15 @@ erc20_tester::erc20_tester(bool use_real_evm, std::string native_symbol_str) : n
     set_abi(erc20_account, testing::contracts::erc20_abi().data());
 
     produce_block();
+    
+    if (native_symbol_str.length()) {
+        push_action(erc20_account, "init"_n, erc20_account, mvo("evm_account", evm_account)("gas_token_symbol", native_symbol_str)("gaslimit", 500000)("init_gaslimit", 10000000));
+
+        BOOST_REQUIRE_EXCEPTION(
+            push_action(erc20_account, "init"_n, erc20_account, mvo("evm_account", evm_account)("gas_token_symbol", native_symbol_str)("gaslimit", 1)("init_gaslimit", 1)),
+            eosio_assert_message_exception, 
+            testing::eosio_assert_message_is("erc20 config already initialized"));
+    }
 
     if (use_real_evm) {
         set_code(evm_account, testing::contracts::evm_wasm());
@@ -316,6 +325,7 @@ transaction_trace_ptr erc20_tester::push_action(const account_name& code,
 
 transaction_trace_ptr erc20_tester::pushtx(const silkworm::Transaction& trx, name miner)
 {
+    if (miner == name()) miner = evm_account;
    silkworm::Bytes rlp;
    silkworm::rlp::encode(rlp, trx);
 

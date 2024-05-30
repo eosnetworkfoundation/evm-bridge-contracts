@@ -407,6 +407,19 @@ try {
     BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(200, token_symbol));
     produce_block();
 
+    // setting a lower gas limit, USDT(EOS)-> USDT(EVM) will fails
+    push_action(erc20_account, "setgaslimit"_n, erc20_account, mvo("gaslimit", 21001)("init_gaslimit", 10000000));
+
+    BOOST_REQUIRE_EXCEPTION(
+        transfer_token(token_account, "alice"_n, erc20_account, make_asset(102, token_symbol), evm1.address_0x().c_str()),
+        eosio_assert_message_exception, 
+        eosio_assert_message_is("pre_validate_transaction error: 22 Intrinsic gas too low")
+    );
+
+    // set it back
+    push_action(erc20_account, "setgaslimit"_n, erc20_account, mvo("gaslimit", 500000)("init_gaslimit", 10000000));
+    transfer_token(token_account, "alice"_n, erc20_account, make_asset(103, token_symbol), evm1.address_0x().c_str());
+
 }
 FC_LOG_AND_RETHROW()
 
