@@ -137,6 +137,8 @@ class erc20_tester : public eosio::testing::base_tester {
 
     unsigned int exec_count = 0; // ensure uniqueness in exec
 
+    evmc::address impl_addr;
+
     eosio::chain::asset make_asset(int64_t amount) const { return eosio::chain::asset(amount, native_symbol); }
     eosio::chain::asset make_asset(int64_t amount, const eosio::chain::symbol& target_symbol) const { return eosio::chain::asset(amount, target_symbol); }
     eosio::chain::transaction_trace_ptr transfer_token(eosio::chain::name token_account_name, eosio::chain::name from, eosio::chain::name to, eosio::chain::asset quantity, std::string memo = "");
