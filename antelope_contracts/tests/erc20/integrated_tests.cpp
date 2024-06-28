@@ -428,7 +428,7 @@ try {
 }
 FC_LOG_AND_RETHROW()
 
-BOOST_FIXTURE_TEST_CASE(it_regtokenwcode, it_tester)
+BOOST_FIXTURE_TEST_CASE(it_regwithcode, it_tester)
 try {
     evm_eoa evm1;
     auto addr_alice = silkworm::make_reserved_address("alice"_n.to_uint64_t());
@@ -471,7 +471,7 @@ try {
         eosio_assert_message_is("ERC-20 token not registerred"));
 
     // register token again (imply a different ERC-EVM address)
-    push_action(erc20_account, "regtokenwcode"_n, erc20_account, mvo()("eos_contract_name",token_account.to_string())("impl_address",fc::variant(impl_addr).as_string())("evm_token_name","EVM USDT V2")("evm_token_symbol","WUSDT")("ingress_fee","0.0100 USDT")("egress_fee","0.0100 EOS")("erc20_precision",6));
+    push_action(erc20_account, "regwithcode"_n, erc20_account, mvo()("eos_contract_name",token_account.to_string())("impl_address",fc::variant(impl_addr).as_string())("evm_token_name","EVM USDT V2")("evm_token_symbol","WUSDT")("ingress_fee","0.0100 USDT")("egress_fee","0.0100 EOS")("erc20_precision",6));
 
     // EOS->EVM: alice transfer 2 USDT to evm1 in EVM (new ERC-EVM address)
     transfer_token(token_account, "alice"_n, erc20_account, make_asset(20000, token_symbol), evm1.address_0x().c_str());
