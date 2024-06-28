@@ -204,7 +204,7 @@ void erc20::regtokenwithcodebytes(eosio::name token_contract, const bytes& addre
     });
 }
 
-[[eosio::action]] void erc20::regtokenwcode(eosio::name token_contract, std::string impl_address, std::string evm_token_name, std::string evm_token_symbol, const eosio::asset& ingress_fee, const eosio::asset &egress_fee, uint8_t erc20_precision) {
+[[eosio::action]] void erc20::regwithcode(eosio::name token_contract, std::string impl_address, std::string evm_token_name, std::string evm_token_symbol, const eosio::asset& ingress_fee, const eosio::asset &egress_fee, uint8_t erc20_precision) {
     require_auth(get_self());
     auto address_bytes = from_hex(impl_address);
     eosio::check(!!address_bytes, "implementation address must be valid 0x EVM address");

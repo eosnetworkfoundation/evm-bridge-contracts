@@ -49,7 +49,7 @@ class [[eosio::contract]] erc20 : public contract {
                                     std::string evm_token_name, std::string evm_token_symbol, 
                                     const eosio::asset &ingress_fee, const eosio::asset &egress_fee, uint8_t erc20_precision);
 
-    [[eosio::action]] void regtokenwcode(eosio::name eos_contract_name,
+    [[eosio::action]] void regwithcode(eosio::name eos_contract_name,
                                         std::string impl_address,
                                     std::string evm_token_name, std::string evm_token_symbol, 
                                     const eosio::asset &ingress_fee, const eosio::asset &egress_fee, uint8_t erc20_precision);
