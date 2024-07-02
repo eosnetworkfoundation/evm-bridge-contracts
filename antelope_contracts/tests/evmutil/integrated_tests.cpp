@@ -98,14 +98,14 @@ struct it_tester : evmutil_tester {
     evm_eoa evm1;
     it_tester() : evmutil_tester(true) {
         create_accounts({"alice"_n});
-        transfer_token(eos_token_account, faucet_account_name, "alice"_n, make_asset(10000'0000));
+        transfer_token(eos_token_account, faucet_account_name, "alice"_n, make_asset(10000'00000000));
         produce_block();
-        transfer_token(token_account, faucet_account_name, "alice"_n, make_asset(10000'0000, token_symbol));
+        transfer_token(token_account, faucet_account_name, "alice"_n, make_asset(10000'00000000, token_symbol));
         produce_block();
         create_accounts({"bob"_n});
-        transfer_token(eos_token_account, faucet_account_name, "bob"_n, make_asset(10000'0000));
+        transfer_token(eos_token_account, faucet_account_name, "bob"_n, make_asset(10000'00000000));
         produce_block();
-        transfer_token(token_account, faucet_account_name, "bob"_n, make_asset(10000'0000, token_symbol));
+        transfer_token(token_account, faucet_account_name, "bob"_n, make_asset(10000'00000000, token_symbol));
 
         produce_block();
 
@@ -380,10 +380,8 @@ BOOST_AUTO_TEST_SUITE(evmutil_tests)
 BOOST_FIXTURE_TEST_CASE(it_xbtc_tests, it_tester)
 try {
     
-    
-
     // Give evm1 some EOS
-    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'0000, eos_token_symbol), evm1.address_0x().c_str());
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), evm1.address_0x().c_str());
     produce_block();
 
 
@@ -423,7 +421,7 @@ BOOST_FIXTURE_TEST_CASE(it_basic_stake, it_tester)
 try {
     
     // Give evm1 some EOS
-    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'0000, eos_token_symbol), evm1.address_0x().c_str());
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), evm1.address_0x().c_str());
 
     produce_block();
     push_action(evmutil_account, "setlocktime"_n, evmutil_account, mvo()("proxy_address",stake_address)("locktime",0));
@@ -477,7 +475,7 @@ BOOST_FIXTURE_TEST_CASE(it_withdraw_lock, it_tester)
 try {
     
     // Give evm1 some EOS
-    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'0000, eos_token_symbol), evm1.address_0x().c_str());
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), evm1.address_0x().c_str());
 
     produce_block();
     auto token_addr = *evmc::from_hex<evmc::address>(xbtc_address);
@@ -548,7 +546,7 @@ BOOST_FIXTURE_TEST_CASE(it_restake, it_tester)
 try {
     
     // Give evm1 some EOS
-    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'0000, eos_token_symbol), evm1.address_0x().c_str());
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), evm1.address_0x().c_str());
 
     produce_block();
     auto token_addr = *evmc::from_hex<evmc::address>(xbtc_address);

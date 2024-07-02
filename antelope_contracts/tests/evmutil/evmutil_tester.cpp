@@ -50,7 +50,7 @@ void to_variant(const checksum256& o, fc::variant& v)
 
 namespace evmutil_test {
 const eosio::chain::symbol token_symbol(4u, "USDT");
-const eosio::chain::symbol eos_token_symbol(4u, "EOS");
+const eosio::chain::symbol eos_token_symbol(8u, "BTC");
 const eosio::chain::name evm_account("evm.xsat");
 const eosio::chain::name faucet_account_name("faucet.xsat");
 const eosio::chain::name evmutil_account("evmutil.xsat");
@@ -150,11 +150,11 @@ evmutil_tester::evmutil_tester(bool use_real_evm, eosio::chain::name evm_account
     push_action(eos_token_account,
                 "create"_n,
                 eos_token_account,
-                mvo()("issuer", eos_token_account)("maximum_supply", asset(10'000'000'000'0000, native_symbol)));
+                mvo()("issuer", eos_token_account)("maximum_supply", asset(10'000'000'000'00000000, native_symbol)));
     push_action(eos_token_account,
                 "issue"_n,
                 eos_token_account,
-                mvo()("to", faucet_account_name)("quantity", asset(1'000'000'000'0000, native_symbol))("memo", ""));
+                mvo()("to", faucet_account_name)("quantity", asset(1'000'000'000'00000000, native_symbol))("memo", ""));
     produce_block();
 
     set_code(token_account, testing::contracts::eosio_token_wasm());
@@ -171,19 +171,19 @@ evmutil_tester::evmutil_tester(bool use_real_evm, eosio::chain::name evm_account
 
 
     produce_block();
-
+/*
     set_code(btc_token_account, testing::contracts::eosio_token_wasm());
     set_abi(btc_token_account, testing::contracts::eosio_token_abi().data());
 
     push_action(btc_token_account,
                 "create"_n,
                 btc_token_account,
-                mvo()("issuer", btc_token_account)("maximum_supply", asset(10'000'000'000'0000, symbol::from_string("4,EOS"))));
+                mvo()("issuer", btc_token_account)("maximum_supply", asset(10'000'000'000'00000000, symbol::from_string("8,BTC"))));
     push_action(btc_token_account,
                 "issue"_n,
                 btc_token_account,
-                mvo()("to", faucet_account_name)("quantity", asset(1'000'000'000'0000, symbol::from_string("4,EOS")))("memo", ""));
-
+                mvo()("to", faucet_account_name)("quantity", asset(1'000'000'000'00000000, symbol::from_string("8,BTC")))("memo", ""));
+*/
 
     produce_block();
 
@@ -214,8 +214,8 @@ evmutil_tester::evmutil_tester(bool use_real_evm, eosio::chain::name evm_account
 
         open(evmutil_account);
 
-        transfer_token(eos_token_account, faucet_account_name, evm_account, make_asset(10000'0000), "evmutil.xsat");
-        auto r = bridgereg(evmutil_account, evmutil_account, asset(0, symbol::from_string("4,EOS")));
+        transfer_token(eos_token_account, faucet_account_name, evm_account, make_asset(10000'00000000), "evmutil.xsat");
+        auto r = bridgereg(evmutil_account, evmutil_account, asset(0, symbol::from_string("8,BTC")));
         // dlog("action trace: ${a}", ("a", r));
         produce_block();
     } else {
@@ -242,7 +242,7 @@ evmutil_tester::evmutil_tester(bool use_real_evm, eosio::chain::name evm_account
     xbtc_addr = silkworm::create_address(deployer.address, deployer.next_nonce); 
 
     if (use_real_evm) {
-        transfer_token(eos_token_account, faucet_account_name, evm_account, make_asset(1000000, eos_token_symbol), deployer.address_0x().c_str());
+        transfer_token(eos_token_account, faucet_account_name, evm_account, make_asset(10000000000, eos_token_symbol), deployer.address_0x().c_str());
 
         auto txn = prepare_deploy_contract_tx(solidity::XBTC::bytecode, sizeof(solidity::XBTC::bytecode), 10'000'000);
 
@@ -267,7 +267,7 @@ evmutil_tester::evmutil_tester(bool use_real_evm, eosio::chain::name evm_account
 
     produce_block();
 
-    push_action(evmutil_account, "regtoken"_n, evmutil_account, mvo()("token_address",fc::variant(xbtc_addr).as_string())("dep_fee","0.0100 EOS")("erc20_precision",18));
+    push_action(evmutil_account, "regtoken"_n, evmutil_account, mvo()("token_address",fc::variant(xbtc_addr).as_string())("dep_fee","0.01000000 BTC")("erc20_precision",18));
 
     produce_block();
 
@@ -291,7 +291,7 @@ void evmutil_tester::init_evm(const uint64_t chainid,
     if (ingress_bridge_fee.has_value()) {
         fee_params("ingress_bridge_fee", *ingress_bridge_fee);
     } else {
-        fee_params("ingress_bridge_fee", "0.0000 EOS");
+        fee_params("ingress_bridge_fee", "0.00000000 BTC");
     }
 
     push_action(evm_account, "init"_n, evm_account, mvo()("chainid", chainid)("fee_params", fee_params));
@@ -304,7 +304,7 @@ void evmutil_tester::init_evm(const uint64_t chainid,
 void evmutil_tester::prepare_self_balance(uint64_t fund_amount) {
     // Ensure internal balance for evm_account_name has at least 1 EOS to cover max bridge gas fee with even high gas
     // price.
-    transfer_token(eos_token_account, faucet_account_name, evm_account, make_asset(1'0000), evm_account.to_string());
+    transfer_token(eos_token_account, faucet_account_name, evm_account, make_asset(1'00000000), evm_account.to_string());
 }
 
 transaction_trace_ptr evmutil_tester::bridgereg(eosio::chain::name receiver, eosio::chain::name handler, eosio::chain::asset min_fee, vector<account_name> extra_signers) {

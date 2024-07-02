@@ -134,7 +134,7 @@ class evmutil_tester : public eosio::testing::base_tester {
 
     const eosio::chain::name evm_account = "evm.xsat"_n;
     const eosio::chain::symbol native_symbol;
-    explicit evmutil_tester(bool use_real_evm = false, eosio::chain::name evm_account_ = "evm.xsat"_n, std::string native_symbol_str = "4,EOS");
+    explicit evmutil_tester(bool use_real_evm = false, eosio::chain::name evm_account_ = "evm.xsat"_n, std::string native_symbol_str = "8,BTC");
 
     unsigned int exec_count = 0; // ensure uniqueness in exec
 
