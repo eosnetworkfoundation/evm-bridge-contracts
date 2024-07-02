@@ -17,6 +17,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+// Code modification by EOS Network Foundation 2024
+// Modified to make the it compile with higher version of compilers.
+// No functionality changes intended.
+// 
 // SPDX-License-Identifier: GPL
 
 pragma solidity >=0.4.18;
