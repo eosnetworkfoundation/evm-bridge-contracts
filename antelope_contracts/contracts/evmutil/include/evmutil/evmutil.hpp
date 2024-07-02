@@ -50,13 +50,13 @@ class [[eosio::contract]] evmutil : public contract {
     [[eosio::action]] void regtoken(std::string token_address, const eosio::asset &dep_fee, uint8_t erc20_precision);
 
     [[eosio::action]] void regwithcode(std::string token_address, std::string impl_address, const eosio::asset &dep_fee, uint8_t erc20_precision);
-    [[eosio::action]] void setdepfee(eosio::name token_contract, std::string proxy_address, const eosio::asset &fee);
+    [[eosio::action]] void setdepfee(std::string proxy_address, const eosio::asset &fee);
     [[eosio::action]] void unregtoken(std::string proxy_address);
 
     [[eosio::action]] void init(eosio::name evm_account, eosio::symbol gas_token_symbol, uint64_t gaslimit, uint64_t init_gaslimit);
 
     [[eosio::action]] void setgaslimit(std::optional<uint64_t> gaslimit, std::optional<uint64_t> init_gaslimit);
-    
+    [[eosio::action]] void setlocktime(std::string proxy_address, uint64_t locktime);
     struct [[eosio::table("implcontract")]] impl_contract_t {
         uint64_t id = 0;
         bytes address;
@@ -115,8 +115,9 @@ class [[eosio::contract]] evmutil : public contract {
         eosio::name   evm_account = default_evm_account;
         eosio::symbol evm_gas_token_symbol = default_native_token_symbol;
         eosio::name   endrmng_account = default_endrmng_account;
+        eosio::name   poolreg_account = default_poolreg_account;
 
-        EOSLIB_SERIALIZE(config_t, (evm_gaslimit)(evm_init_gaslimit)(evm_account)(evm_gas_token_symbol)(endrmng_account));
+        EOSLIB_SERIALIZE(config_t, (evm_gaslimit)(evm_init_gaslimit)(evm_account)(evm_gas_token_symbol)(endrmng_account)(poolreg_account));
     };
     typedef eosio::singleton<"config"_n, config_t> config_singleton_t;
 

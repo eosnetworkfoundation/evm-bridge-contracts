@@ -3,6 +3,7 @@
 #include <evmutil/hex.hpp>
 #include <evmutil/evm_runtime.hpp>
 #include <evmutil/endrmng.hpp>
+#include <evmutil/poolreg.hpp>
 
 #include <evmutil/claim_reward_helper_bytecode.hpp>
 #include <evmutil/stakehelper_bytecode.hpp>
@@ -286,6 +287,7 @@ void evmutil::handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delt
     // 0xdc4653f4 : f45346dc : deposit(address,uint256,address)
     // 0xec8d3269 : 69328dec : withdraw(address,uint256,address)
     // 0x42b3c021 : 21c0b342 : claim(address,address)
+    // 0x97fba943 : 43a9fb97 : restake(address,address,address)
 
     auto read_uint256 = [&](const auto &msg, size_t offset) -> intx::uint256 {
             uint8_t buffer[32]={};
@@ -360,8 +362,29 @@ void evmutil::handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delt
         endrmng::evmunstake_action evmunstake_act(config.endrmng_account, {{receiver_account(), "active"_n}});
         evmunstake_act.send(make_key(msg.sender), make_key(sender_addr.bytes, kAddressLength), *dest_acc, dest_amount);
 
-    }
-    else {
+    } else if (app_type == 0x97fba943) /* restake(address,address,address) */{
+        check(read_uint256(msg, 4) <= 0xffffFFFFffffFFFFffffFFFFffffFFFFffffFFFF_u256, "invalid from address");
+        evmc::address from_addr;
+        memcpy(from_addr.bytes, (void *)&(msg.data[4 + 32 - kAddressLength]), kAddressLength);
+        std::optional<uint64_t> from_acc = silkworm::extract_reserved_address(from_addr);
+        check(!!from_acc, "from address in bridge_message_v0 must be reserved address");
+
+        check(read_uint256(msg, 4 + 32) <= 0xffffFFFFffffFFFFffffFFFFffffFFFFffffFFFF_u256, "invalid to address");
+        evmc::address to_addr;
+        memcpy(to_addr.bytes, (void *)&(msg.data[4 + 32 + 32 - kAddressLength]), kAddressLength);
+        std::optional<uint64_t> to_acc = silkworm::extract_reserved_address(to_addr);
+        check(!!to_acc, "to address in bridge_message_v0 must be reserved address");
+        
+
+        check(read_uint256(msg, 4 + 32 + 32) <= 0xffffFFFFffffFFFFffffFFFFffffFFFFffffFFFF_u256, "invalid sender address");
+        evmc::address sender_addr;
+        memcpy(sender_addr.bytes, (void *)&(msg.data[4 + 32 + 32 + 32 - kAddressLength]), kAddressLength);
+
+        endrmng::evmnewstake_action evmnewstake_act(config.endrmng_account, {{receiver_account(), "active"_n}});
+        evmnewstake_act.send(make_key(msg.sender),make_key(sender_addr.bytes, kAddressLength), *from_acc, *to_acc);
+
+
+    } else {
         eosio::check(false, "unsupported bridge_message version");
     }
 
@@ -372,7 +395,7 @@ void evmutil::handle_utxo_access(const bridge_message_v0 &msg) {
 }
 
 void evmutil::handle_sync_rewards(const bridge_message_v0 &msg) {
-
+    config_t config = get_config();
     check(msg.data.size() >= 4, "not enough data in bridge_message_v0");
 
     uint32_t app_type = 0;
@@ -397,15 +420,9 @@ void evmutil::handle_sync_rewards(const bridge_message_v0 &msg) {
         std::optional<uint64_t> dest_acc = silkworm::extract_reserved_address(dest_addr);
         check(!!dest_acc, "destination address in bridge_message_v0 must be reserved address");
 
-        check(read_uint256(msg, 4 + 32) <= 0xffffFFFFffffFFFFffffFFFFffffFFFFffffFFFF_u256, "invalid sender address");
-        evmc::address sender_addr;
-        memcpy(sender_addr.bytes, (void *)&(msg.data[4 + 32 + 32 - kAddressLength]), kAddressLength);
-
-        // TODO: send request
-        // eosio::token::transfer_action transfer_act(itr->token_contract, {{get_self(), "active"_n}});
-        // transfer_act.send(get_self(), dest_eos_acct, eosio::asset(dest_amount, itr->ingress_fee.symbol), memo);
-
-    
+        poolreg::claim_action claim_act(config.poolreg_account, {{receiver_account(), "active"_n}});
+        // seems hit some bug/limitation in the template, need an explicit conversion here.
+        claim_act.send(eosio::name(*dest_acc));
     } else {
         eosio::check(false, "unsupported bridge_message version");
     }
@@ -448,7 +465,7 @@ void evmutil::transfer(eosio::name from, eosio::name to, eosio::asset quantity,
     eosio::check(false, "this address should not accept tokens");
 }
 
-void evmutil::setdepfee(eosio::name token_contract, std::string proxy_address, const eosio::asset &fee) {
+void evmutil::setdepfee(std::string proxy_address, const eosio::asset &fee) {
     require_auth(get_self());
 
     config_t config = get_config();
@@ -480,6 +497,42 @@ void evmutil::setdepfee(eosio::name token_contract, std::string proxy_address, c
     uint8_t func_[4] = {0x69,0xfe,0x0e,0x2d};
     call_data.insert(call_data.end(), func_, func_ + sizeof(func_));
     pack_uint256(call_data, fee_evm);
+
+    bytes value_zero; 
+    value_zero.resize(32, 0);
+
+    evm_runtime::call_action call_act(config.evm_account, {{receiver_account(), "active"_n}});
+    call_act.send(receiver_account(), token_table_iter->address, value_zero, call_data, config.evm_gaslimit);
+}
+
+void evmutil::setlocktime(std::string proxy_address, uint64_t locktime) {
+    require_auth(get_self());
+
+    config_t config = get_config();
+
+
+    auto address_bytes = from_hex(proxy_address);
+    eosio::check(!!address_bytes, "token address must be valid 0x EVM address");
+    eosio::check(address_bytes->size() == kAddressLength, "invalid length of token address");
+
+    checksum256 addr_key = make_key(*address_bytes);
+    token_table_t token_table(_self, _self.value);
+    auto index = token_table.get_index<"by.address"_n>();
+    auto token_table_iter = index.find(addr_key);
+
+    check(token_table_iter != index.end() && token_table_iter->address == address_bytes, "ERC-20 token not registerred");
+
+    auto pack_uint256 = [&](bytes &ds, const intx::uint256 &val) {
+        uint8_t val_[32] = {};
+        intx::be::store(val_, val);
+        ds.insert(ds.end(), val_, val_ + sizeof(val_));
+    };
+
+    bytes call_data;
+    // sha(setLockTime(uint256)) == 0xae04d45d
+    uint8_t func_[4] = {0xae,0x04,0xd4,0x5d};
+    call_data.insert(call_data.end(), func_, func_ + sizeof(func_));
+    pack_uint256(call_data, intx::uint256(locktime));
 
     bytes value_zero; 
     value_zero.resize(32, 0);

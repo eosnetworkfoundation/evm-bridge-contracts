@@ -54,6 +54,7 @@ class [[eosio::contract]] stub_endrmng : public contract {
     [[eosio::action]] void evmunstake(const checksum256& proxy, const checksum256& staker, const name& validator, const uint64_t quantity);   
     [[eosio::action]] void evmclaim(const checksum256& proxy, const checksum256& staker, const name& validator);  
     [[eosio::action]] void reset(const checksum256& proxy, const checksum256& staker, const name& validator);  
+    [[eosio::action]] void evmnewstake(const checksum256& proxy, const checksum256& staker, const name& validator, const name& new_validator);
 };
 
 void stub_endrmng::evmstake(const checksum256& proxy, const checksum256& staker, const name& validator, const uint64_t quantity) {
@@ -87,6 +88,17 @@ void stub_endrmng::evmclaim(const checksum256& proxy, const checksum256& staker,
     check(staker == config.staker, "staker not found");
     check(validator == config.validator, "validator not found");
     
+    return;
+}
+
+void stub_endrmng::evmnewstake(const checksum256& proxy, const checksum256& staker, const name& validator, const name& new_validator) {
+    config_t config = get_config();
+    
+    check(proxy == config.proxy, "proxy not found" );
+    check(staker == config.staker, "staker not found");
+    check(validator == config.validator, "validator not found");
+    config.validator = new_validator;
+    set_config(config);
     return;
 }
 

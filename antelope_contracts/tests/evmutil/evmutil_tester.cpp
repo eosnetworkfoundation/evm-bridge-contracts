@@ -216,7 +216,7 @@ evmutil_tester::evmutil_tester(bool use_real_evm, eosio::chain::name evm_account
 
         transfer_token(eos_token_account, faucet_account_name, evm_account, make_asset(10000'0000), "evmutil.xsat");
         auto r = bridgereg(evmutil_account, evmutil_account, asset(0, symbol::from_string("4,EOS")));
-        dlog("action trace: ${a}", ("a", r));
+        // dlog("action trace: ${a}", ("a", r));
         produce_block();
     } else {
         set_code(evm_account, testing::contracts::evm_stub_wasm());

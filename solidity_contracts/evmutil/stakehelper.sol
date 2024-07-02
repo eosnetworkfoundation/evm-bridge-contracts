@@ -1347,17 +1347,27 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
     address public linkedEOSAddress;
     address public evmAddress;
     uint256 public depositFee;
+    uint256 public lockTime;
+    uint256 public maxPendingQueueSize;
 
     IERC20 public linkedERC20;
 
-    struct StakeInfo {
+    struct PendingFunds {
         uint256 amount;
+        uint256 startingHeight;
     }
 
+    struct StakeInfo {
+        uint256 amount;
+        uint256 pendingFundsFirst;
+        uint256 pendingFundsLast;
+        uint256 unlockedFund;
+        mapping(uint256 => PendingFunds) pendingFunds;
+    }
 
     mapping(address => mapping(address => StakeInfo)) public stakeInfo;
 
-     function initialize(IERC20 _linkedERC20, uint256 _depositFee) initializer public {
+    function initialize(IERC20 _linkedERC20, uint256 _depositFee) initializer public {
         __UUPSUpgradeable_init();
 
         linkedERC20 = _linkedERC20;
@@ -1365,7 +1375,8 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         linkedEOSAddress = 0xBbbBBBBbBbbBbbbbBBBBbBbb56e5ACba20ee0D90;
         evmAddress = 0xBBbBbbbbbBbbbbBBBBbbbBbb56e40ee0D9000000;
         depositFee = _depositFee;
-
+        lockTime = 2419200; // 28 days
+        maxPendingQueueSize = 50; // A limit that normally will not be hit. Sort of last defence.
     }
 
     function _authorizeUpgrade(address) internal virtual override {
@@ -1376,9 +1387,47 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         return ((uint160(addr) & uint160(0xFffFfFffffFfFFffffFFFffF0000000000000000)) == uint160(0xBBbbBbBbbBbbBbbbBbbbBBbb0000000000000000));
     }
 
+    function refreshPendingFunds(address _target, address _caller) internal {
+        StakeInfo storage stake = stakeInfo[_target][_caller];
+        while (stake.pendingFundsFirst < stake.pendingFundsLast) {
+            PendingFunds storage firstEntry = stake.pendingFunds[stake.pendingFundsFirst];
+            if (firstEntry.startingHeight + lockTime <= block.number) {
+                stake.unlockedFund += firstEntry.amount;
+                delete stake.pendingFunds[stake.pendingFundsFirst];
+                stake.pendingFundsFirst += 1;
+            }
+            else {
+                break;
+            }
+        }
+    }
+
+    function pushPendingFunds(address _target, address _caller, uint256 _amount) internal {
+        refreshPendingFunds(_target, _caller);
+        StakeInfo storage stake = stakeInfo[_target][_caller];
+
+        if (stake.pendingFundsLast - stake.pendingFundsFirst < maxPendingQueueSize) {
+            PendingFunds storage newEntry = stake.pendingFunds[stake.pendingFundsLast];
+            newEntry.amount = _amount;
+            newEntry.startingHeight = block.number;
+            stake.pendingFundsLast += 1;
+        }
+        else {
+            // Merge into last one
+            PendingFunds storage lastEntry = stake.pendingFunds[stake.pendingFundsLast - 1];
+            lastEntry.startingHeight = block.number;
+            lastEntry.amount += _amount;
+        }
+    }
+
     function setFee(uint256 _depositFee) public {
         require(msg.sender == linkedEOSAddress, "Bridge: only linked EOS address can set fee");
         depositFee = _depositFee;
+    }
+
+    function setLockTime(uint256 _lockTime) public {
+        require(msg.sender == linkedEOSAddress, "Bridge: only linked EOS address can set lock time");
+        lockTime = _lockTime;
     }
 
     function deposit(address _target, uint256 _amount) external payable {
@@ -1399,6 +1448,27 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
 
     }
 
+    function restake(address _from, address _to) external {
+        StakeInfo storage stake = stakeInfo[_from][msg.sender];
+
+        // Restake must take all!
+        uint256 amount = stake.amount;
+        stake.amount = 0;
+
+        StakeInfo storage stakeTo = stakeInfo[_to][msg.sender];
+
+        if (amount > 0) {
+            stakeTo.amount = stakeTo.amount + amount;
+        }
+
+        // The action is aynchronously viewed from EVM and looks UNSAFE.
+        // BUT in fact the call will be executed as inline action.
+        // If the cross chain call fail, the whole tx including the EVM action will be rejected.
+        bytes memory receiver_msg = abi.encodeWithSignature("restake(address,address,address)", _from, _to, msg.sender);
+        (bool success, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, receiver_msg ));
+        if(!success) { revert(); }
+    }
+
     function claim(address _target) external {
         // The action is aynchronously viewed from EVM and looks UNSAFE.
         // BUT in fact the call will be executed as inline action.
@@ -1413,7 +1483,8 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
 
         if (_amount > 0) {
             stake.amount = stake.amount - _amount;
-            linkedERC20.safeTransfer(address(msg.sender), _amount);
+
+            pushPendingFunds(_target, address(msg.sender), _amount);
         }
 
         // The action is aynchronously viewed from EVM and looks UNSAFE.
@@ -1422,7 +1493,19 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         bytes memory receiver_msg = abi.encodeWithSignature("withdraw(address,uint256,address)", _target, _amount, msg.sender);
         (bool success, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, receiver_msg ));
         if(!success) { revert(); }
-    }   
+    }
+
+    function claimPendingFunds(address _target) external { 
+        refreshPendingFunds(_target, address(msg.sender));
+
+        StakeInfo storage stake = stakeInfo[_target][msg.sender];
+
+        if (stake.unlockedFund > 0) {
+            uint256 funds = stake.unlockedFund;
+            stake.unlockedFund = 0;
+            linkedERC20.safeTransfer(address(msg.sender), funds);
+        }
+    }
 
     function collectFee(address payable dest) public {
         require(msg.sender == linkedEOSAddress, "Bridge: only linked EOS address can collect fee");
