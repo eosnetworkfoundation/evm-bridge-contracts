@@ -211,7 +211,7 @@ erc20_tester::erc20_tester(bool use_real_evm, eosio::chain::name evm_account_, s
     produce_block();
 
     evm_eoa deployer;
-    evmc::address impl_addr = silkworm::create_address(deployer.address, deployer.next_nonce); 
+    impl_addr = silkworm::create_address(deployer.address, deployer.next_nonce); 
 
     if (use_real_evm) {
         transfer_token(eos_token_account, faucet_account_name, evmin_account, make_asset(1000000, eos_token_symbol), deployer.address_0x().c_str());

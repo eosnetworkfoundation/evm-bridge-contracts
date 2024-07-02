@@ -106,8 +106,11 @@ void erc20::upgradeto(std::string impl_address) {
     });
 }
 
-[[eosio::action]] void erc20::regtoken(eosio::name token_contract, std::string evm_token_name, std::string evm_token_symbol, const eosio::asset& ingress_fee, const eosio::asset &egress_fee, uint8_t erc20_precision) {
+void erc20::regtokenwithcodebytes(eosio::name token_contract, const bytes& address_bytes, std::string evm_token_name, std::string evm_token_symbol, const eosio::asset& ingress_fee, const eosio::asset &egress_fee, uint8_t erc20_precision) {
     require_auth(get_self());
+    
+    eosio::check(address_bytes.size() == kAddressLength, "invalid length of implementation address");
+
     config_t config = get_config();
 
     eosio::check(eosio::is_account(token_contract), "invalid token_contract");
@@ -128,11 +131,6 @@ void erc20::upgradeto(std::string impl_address) {
     auto index_symbol = token_table.get_index<"by.symbol"_n>();
     check(index_symbol.find(token_symbol_key(token_contract, ingress_fee.symbol.code())) == index_symbol.end(), "token already registered");
 
-    impl_contract_table_t contract_table(_self, _self.value);
-    eosio::check(contract_table.begin() != contract_table.end(), "no implementaion contract available");
-    auto contract_itr = contract_table.end();
-    --contract_itr;
-
     auto reserved_addr = silkworm::make_reserved_address(receiver_account().value);
 
     bytes call_data;
@@ -140,7 +138,7 @@ void erc20::upgradeto(std::string impl_address) {
 
     // constructor(address erc20_impl_contract, memory _data)
     call_data.insert(call_data.end(), 32 - kAddressLength, 0);  // padding for address
-    call_data.insert(call_data.end(), contract_itr->address.begin(), contract_itr->address.end());
+    call_data.insert(call_data.end(), address_bytes.begin(), address_bytes.end());
 
     bytes constructor_data;
     // sha(function initialize(uint8 _precision,uint256 _egressFee,string memory _name,string memory _symbol,string memory _eos_token_contract)) == 0xd66d4ac3
@@ -204,6 +202,28 @@ void erc20::upgradeto(std::string impl_address) {
         v.fee_balance = v.balance;
         v.erc20_precision = erc20_precision;
     });
+}
+
+[[eosio::action]] void erc20::regwithcode(eosio::name token_contract, std::string impl_address, std::string evm_token_name, std::string evm_token_symbol, const eosio::asset& ingress_fee, const eosio::asset &egress_fee, uint8_t erc20_precision) {
+    require_auth(get_self());
+    auto address_bytes = from_hex(impl_address);
+    eosio::check(!!address_bytes, "implementation address must be valid 0x EVM address");
+    eosio::check(address_bytes->size() == kAddressLength, "invalid length of implementation address");
+
+    regtokenwithcodebytes(token_contract, *address_bytes, evm_token_name, evm_token_symbol, ingress_fee, egress_fee, erc20_precision);
+
+}
+
+[[eosio::action]] void erc20::regtoken(eosio::name token_contract, std::string evm_token_name, std::string evm_token_symbol, const eosio::asset& ingress_fee, const eosio::asset &egress_fee, uint8_t erc20_precision) {
+    require_auth(get_self());
+    
+    impl_contract_table_t contract_table(_self, _self.value);
+    eosio::check(contract_table.begin() != contract_table.end(), "no implementaion contract available");
+    auto contract_itr = contract_table.end();
+    --contract_itr;
+
+    regtokenwithcodebytes(token_contract, contract_itr->address, evm_token_name, evm_token_symbol, ingress_fee, egress_fee, erc20_precision);
+
 }
 
 void erc20::onbridgemsg(const bridge_message_t &message) {
