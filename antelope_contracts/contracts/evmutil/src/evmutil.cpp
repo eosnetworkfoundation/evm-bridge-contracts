@@ -5,8 +5,8 @@
 #include <evmutil/endrmng.hpp>
 #include <evmutil/poolreg.hpp>
 
-#include <evmutil/claim_reward_helper_bytecode.hpp>
-#include <evmutil/stakehelper_bytecode.hpp>
+#include <evmutil/sync_reward_helper_bytecode.hpp>
+#include <evmutil/stake_helper_bytecode.hpp>
 #include <erc20/proxy_bytecode.hpp>
 
 #include <silkworm/core/execution/address.hpp>
@@ -105,7 +105,7 @@ void evmutil::deployhelper() {
     bytes call_data;
 
     auto reserved_addr = silkworm::make_reserved_address(receiver_account().value);
-    initialize_data(call_data, solidity::claimrewardhelper::bytecode);
+    initialize_data(call_data, solidity::syncrewardhelper::bytecode);
 
     bytes to = {};
     bytes value_zero; 

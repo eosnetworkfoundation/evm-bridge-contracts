@@ -1507,6 +1507,26 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         }
     }
 
+    function pendingFunds(address _target) external view returns (uint256) {
+        StakeInfo storage stake = stakeInfo[_target][msg.sender];
+        uint256 result = stake.unlockedFund;
+        uint256 first = stake.pendingFundsFirst;
+        uint256 last = stake.pendingFundsLast;
+
+        while (first < last) {
+            PendingFunds storage firstEntry = stake.pendingFunds[first];
+            if (firstEntry.startingHeight + lockTime <= block.number) {
+                result += firstEntry.amount;
+                first += 1;
+            }
+            else {
+                break;
+            }
+        }
+
+        return result;
+    }
+
     function collectFee(address payable dest) public {
         require(msg.sender == linkedEOSAddress, "Bridge: only linked EOS address can collect fee");
         (bool success, ) = dest.call{value: address(this).balance}("");

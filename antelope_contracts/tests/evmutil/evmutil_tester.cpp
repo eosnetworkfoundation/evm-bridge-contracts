@@ -13,7 +13,7 @@
 #include <intx/intx.hpp>
 
 #include <utils/xbtc_bytecode.hpp>
-#include <evmutil/stakehelper_bytecode.hpp>
+#include <evmutil/stake_helper_bytecode.hpp>
 #include <optional>
 
 using namespace eosio;

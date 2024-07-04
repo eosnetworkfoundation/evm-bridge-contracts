@@ -2,7 +2,8 @@
 
 pragma solidity ^0.8.18;
 
-contract ClaimRewardHelper  { 
+// Synchronizer Reward Helper
+contract SyncRewardHelper  { 
 
     string  public linkedEOSAccountName;
     address public linkedEOSAddress;
