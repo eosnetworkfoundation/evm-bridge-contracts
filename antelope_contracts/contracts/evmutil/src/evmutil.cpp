@@ -19,7 +19,50 @@ namespace eosio {
          uint32_t get_code_hash(uint64_t account, uint32_t struct_version, char* data, uint32_t size);
       }
    }
+} // namespace eosio
+
+namespace {
+
+void readUint256(const evmutil::bytes &data, size_t offset, intx::uint256 &output) {
+    auto read_uint256 = [&](const auto &data, size_t offset) -> intx::uint256 {
+            uint8_t buffer[32]={};
+            check(data.size() >= offset + 32, "not enough data in bridge_message_v0");
+            memcpy(buffer, (void *)&(data[offset]), 32);
+            return intx::be::load<intx::uint256>(buffer);
+    };
+    output = read_uint256(data, offset);
 }
+
+void readEvmAddress(const evmutil::bytes &data, size_t offset, evmc::address &output) {
+    intx::uint256 value;
+    readUint256(data, offset, value);
+    check(value <= 0xffffFFFFffffFFFFffffFFFFffffFFFFffffFFFF_u256, "invalid evm address");
+
+    memcpy(output.bytes, (void *)&(data[offset+ 32 - evmutil::kAddressLength]), evmutil::kAddressLength);
+}
+
+void readExSatAccount(const evmutil::bytes &data, size_t offset, uint64_t &output) {
+    evmc::address dest_addr;
+    readEvmAddress(data, offset, dest_addr);
+
+    std::optional<uint64_t> dest_acc = silkworm::extract_reserved_address(dest_addr);
+    check(!!dest_acc, "destination address in bridge_message_v0 must be reserved address");
+    output = *dest_acc;
+}
+
+void readTokenAmount(const evmutil::bytes &data, size_t offset, uint64_t &output, uint64_t delta_precision) {
+    intx::uint256 value;
+    readUint256(data, offset, value);
+
+    intx::uint256 mult = intx::exp(10_u256, intx::uint256(delta_precision));
+    check(value % mult == 0_u256, "bridge amount can not have dust");
+    value /= mult;
+
+    output = (uint64_t)value;
+    check(intx::uint256(output) == value && output < (1ull<<62)-1, "bridge amount value overflow");
+    check(output > 0, "bridge amount must be positive");
+}
+} // namespace
 
 namespace evmutil {
 
@@ -173,7 +216,7 @@ void evmutil::regtokenwithcodebytes(const bytes& erc20_address_bytes, const byte
     eosio::check(erc20_precision >= dep_fee.symbol.precision() &&
     erc20_precision <= dep_fee.symbol.precision() + 57, "evmutil precision out of range");
 
-    eosio::check(dep_fee.symbol == config.evm_gas_token_symbol, "egress_fee should have native token symbol");
+    eosio::check(dep_fee.symbol == config.evm_gas_token_symbol, "deposit_fee should have native token symbol");
     intx::uint256 dep_fee_evm = dep_fee.amount;
     dep_fee_evm *= get_minimum_natively_representable(config);
 
@@ -258,7 +301,6 @@ void evmutil::regtokenwithcodebytes(const bytes& erc20_address_bytes, const byte
     eosio::check(token_address_bytes->size() == kAddressLength, "invalid length of token address");
 
     regtokenwithcodebytes(*token_address_bytes, *address_bytes, dep_fee, erc20_precision);
-
 }
 
 [[eosio::action]] void evmutil::regtoken(std::string token_address, const eosio::asset &dep_fee, uint8_t erc20_precision) {
@@ -274,7 +316,6 @@ void evmutil::regtokenwithcodebytes(const bytes& erc20_address_bytes, const byte
     eosio::check(token_address_bytes->size() == kAddressLength, "invalid length of token address");
 
     regtokenwithcodebytes(*token_address_bytes, contract_itr->address, dep_fee, erc20_precision);
-
 }
 
 void evmutil::handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delta_precision) {
@@ -289,105 +330,66 @@ void evmutil::handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delt
     // 0x42b3c021 : 21c0b342 : claim(address,address)
     // 0x97fba943 : 43a9fb97 : restake(address,address,address)
 
-    auto read_uint256 = [&](const auto &msg, size_t offset) -> intx::uint256 {
-            uint8_t buffer[32]={};
-            check(msg.data.size() >= offset + 32, "not enough data in bridge_message_v0 of application type 0x42b3c021");
-            memcpy(buffer, (void *)&(msg.data[offset]), 32);
-            return intx::be::load<intx::uint256>(buffer);
-    };
-
     if (app_type == 0x42b3c021) /* claim(address,address) */{
         check(msg.data.size() >= 4 + 32 /*to*/ + 32 /*from*/, 
             "not enough data in bridge_message_v0 of application type 0x653332e5");
 
-        check(read_uint256(msg, 4) <= 0xffffFFFFffffFFFFffffFFFFffffFFFFffffFFFF_u256, "invalid destination address");
-        evmc::address dest_addr;
-        memcpy(dest_addr.bytes, (void *)&(msg.data[4 + 32 - kAddressLength]), kAddressLength);
-        std::optional<uint64_t> dest_acc = silkworm::extract_reserved_address(dest_addr);
-        check(!!dest_acc, "destination address in bridge_message_v0 must be reserved address");
+        uint64_t dest_acc;
+        readExSatAccount(msg.data, 4, dest_acc);
 
-        check(read_uint256(msg, 4 + 32) <= 0xffffFFFFffffFFFFffffFFFFffffFFFFffffFFFF_u256, "invalid sender address");
         evmc::address sender_addr;
-        memcpy(sender_addr.bytes, (void *)&(msg.data[4 + 32 + 32 - kAddressLength]), kAddressLength);
-
+        readEvmAddress(msg.data, 4 + 32, sender_addr);
 
         endrmng::evmclaim_action evmclaim_act(config.endrmng_account, {{receiver_account(), "active"_n}});
-        evmclaim_act.send(make_key(msg.sender), make_key(sender_addr.bytes, kAddressLength), *dest_acc);
-
-    
+        evmclaim_act.send(make_key(msg.sender), make_key(sender_addr.bytes, kAddressLength), dest_acc);
     } else if (app_type == 0xdc4653f4) /* deposit(address,uint256,address) */{
-        check(read_uint256(msg, 4) <= 0xffffFFFFffffFFFFffffFFFFffffFFFFffffFFFF_u256, "invalid destination address");
-        evmc::address dest_addr;
-        memcpy(dest_addr.bytes, (void *)&(msg.data[4 + 32 - kAddressLength]), kAddressLength);
-        std::optional<uint64_t> dest_acc = silkworm::extract_reserved_address(dest_addr);
-        check(!!dest_acc, "destination address in bridge_message_v0 must be reserved address");
+        check(msg.data.size() >= 4 + 32 + 32 + 32, 
+            "not enough data in bridge_message_v0 of application type 0xdc4653f4");
 
-        intx::uint256 value = read_uint256(msg, 4 + 32);
-        intx::uint256 mult = intx::exp(10_u256, intx::uint256(delta_precision));
-        check(value % mult == 0_u256, "bridge amount can not have dust");
-        value /= mult;
+        uint64_t dest_acc;
+        readExSatAccount(msg.data, 4, dest_acc);
 
-        uint64_t dest_amount = (uint64_t)value;
-        check(intx::uint256(dest_amount) == value && dest_amount < (1ull<<62)-1, "bridge amount value overflow");
-        check(dest_amount > 0, "bridge amount must be positive");
+        uint64_t dest_amount = 0;
+        readTokenAmount(msg.data, 4 + 32, dest_amount, delta_precision);
 
-        check(read_uint256(msg, 4 + 32 + 32) <= 0xffffFFFFffffFFFFffffFFFFffffFFFFffffFFFF_u256, "invalid sender address");
         evmc::address sender_addr;
-        memcpy(sender_addr.bytes, (void *)&(msg.data[4 + 32 + 32 + 32 - kAddressLength]), kAddressLength);
+        readEvmAddress(msg.data, 4 + 32 + 32, sender_addr);
 
         endrmng::evmstake_action evmstake_act(config.endrmng_account, {{receiver_account(), "active"_n}});
-        evmstake_act.send(make_key(msg.sender),make_key(sender_addr.bytes, kAddressLength), *dest_acc, dest_amount);
-
-
+        evmstake_act.send(make_key(msg.sender),make_key(sender_addr.bytes, kAddressLength), dest_acc, dest_amount);
     } else if (app_type == 0xec8d3269) /* withdraw(address,uint256,address) */ {
-        check(read_uint256(msg, 4) <= 0xffffFFFFffffFFFFffffFFFFffffFFFFffffFFFF_u256, "invalid destination address");
-        evmc::address dest_addr;
-        memcpy(dest_addr.bytes, (void *)&(msg.data[4 + 32 - kAddressLength]), kAddressLength);
-        std::optional<uint64_t> dest_acc = silkworm::extract_reserved_address(dest_addr);
-        check(!!dest_acc, "destination address in bridge_message_v0 must be reserved address");
+        check(msg.data.size() >= 4 + 32 + 32 + 32, 
+            "not enough data in bridge_message_v0 of application type 0xec8d3269");
 
-        intx::uint256 value = read_uint256(msg, 4 + 32);
-        intx::uint256 mult = intx::exp(10_u256, intx::uint256(delta_precision));
-        check(value % mult == 0_u256, "bridge amount can not have dust");
-        value /= mult;
+        uint64_t dest_acc;
+        readExSatAccount(msg.data, 4, dest_acc);
 
-        uint64_t dest_amount = (uint64_t)value;
-        check(intx::uint256(dest_amount) == value && dest_amount < (1ull<<62)-1, "bridge amount value overflow");
-        check(dest_amount > 0, "bridge amount must be positive");
+        uint64_t dest_amount = 0;
+        readTokenAmount(msg.data, 4 + 32, dest_amount, delta_precision);
 
-        check(read_uint256(msg, 4 + 32 + 32) <= 0xffffFFFFffffFFFFffffFFFFffffFFFFffffFFFF_u256, "invalid sender address");
         evmc::address sender_addr;
-        memcpy(sender_addr.bytes, (void *)&(msg.data[4 + 32 + 32 + 32 - kAddressLength]), kAddressLength);
+        readEvmAddress(msg.data, 4 + 32 + 32, sender_addr);
         
         endrmng::evmunstake_action evmunstake_act(config.endrmng_account, {{receiver_account(), "active"_n}});
-        evmunstake_act.send(make_key(msg.sender), make_key(sender_addr.bytes, kAddressLength), *dest_acc, dest_amount);
-
+        evmunstake_act.send(make_key(msg.sender), make_key(sender_addr.bytes, kAddressLength), dest_acc, dest_amount);
     } else if (app_type == 0x97fba943) /* restake(address,address,address) */{
-        check(read_uint256(msg, 4) <= 0xffffFFFFffffFFFFffffFFFFffffFFFFffffFFFF_u256, "invalid from address");
-        evmc::address from_addr;
-        memcpy(from_addr.bytes, (void *)&(msg.data[4 + 32 - kAddressLength]), kAddressLength);
-        std::optional<uint64_t> from_acc = silkworm::extract_reserved_address(from_addr);
-        check(!!from_acc, "from address in bridge_message_v0 must be reserved address");
+        check(msg.data.size() >= 4 + 32 + 32 + 32, 
+            "not enough data in bridge_message_v0 of application type 0x97fba943");
 
-        check(read_uint256(msg, 4 + 32) <= 0xffffFFFFffffFFFFffffFFFFffffFFFFffffFFFF_u256, "invalid to address");
-        evmc::address to_addr;
-        memcpy(to_addr.bytes, (void *)&(msg.data[4 + 32 + 32 - kAddressLength]), kAddressLength);
-        std::optional<uint64_t> to_acc = silkworm::extract_reserved_address(to_addr);
-        check(!!to_acc, "to address in bridge_message_v0 must be reserved address");
-        
+        uint64_t from_acc;
+        readExSatAccount(msg.data, 4, from_acc);
 
-        check(read_uint256(msg, 4 + 32 + 32) <= 0xffffFFFFffffFFFFffffFFFFffffFFFFffffFFFF_u256, "invalid sender address");
+        uint64_t to_acc;
+        readExSatAccount(msg.data, 4 + 32, to_acc);
+
         evmc::address sender_addr;
-        memcpy(sender_addr.bytes, (void *)&(msg.data[4 + 32 + 32 + 32 - kAddressLength]), kAddressLength);
+        readEvmAddress(msg.data, 4 + 32 + 32, sender_addr);
 
         endrmng::evmnewstake_action evmnewstake_act(config.endrmng_account, {{receiver_account(), "active"_n}});
-        evmnewstake_act.send(make_key(msg.sender),make_key(sender_addr.bytes, kAddressLength), *from_acc, *to_acc);
-
-
+        evmnewstake_act.send(make_key(msg.sender),make_key(sender_addr.bytes, kAddressLength), from_acc, to_acc);
     } else {
         eosio::check(false, "unsupported bridge_message version");
     }
-
 }
 
 void evmutil::handle_utxo_access(const bridge_message_v0 &msg) {
@@ -407,22 +409,15 @@ void evmutil::handle_sync_rewards(const bridge_message_v0 &msg) {
         check(msg.data.size() >= 4 + 32 /*to*/ + 32 /*from*/, 
             "not enough data in bridge_message_v0 of application type 0x653332e5");
 
-        auto read_uint256 = [&](const auto &msg, size_t offset) -> intx::uint256 {
-            uint8_t buffer[32]={};
-            check(msg.data.size() >= offset + 32, "not enough data in bridge_message_v0 of application type 0x42b3c021");
-            memcpy(buffer, (void *)&(msg.data[offset]), 32);
-            return intx::be::load<intx::uint256>(buffer);
-        };
+        uint64_t dest_acc;
+        readExSatAccount(msg.data, 4, dest_acc);
 
-        check(read_uint256(msg, 4) <= 0xffffFFFFffffFFFFffffFFFFffffFFFFffffFFFF_u256, "invalid destination address");
-        evmc::address dest_addr;
-        memcpy(dest_addr.bytes, (void *)&(msg.data[4 + 32 - kAddressLength]), kAddressLength);
-        std::optional<uint64_t> dest_acc = silkworm::extract_reserved_address(dest_addr);
-        check(!!dest_acc, "destination address in bridge_message_v0 must be reserved address");
+        // Note that there's a second argument in the call for the sender address.
+        // We currently do not use it. But we collect in the bridge call in case we want to add more sanity checks here.
 
         poolreg::claim_action claim_act(config.poolreg_account, {{receiver_account(), "active"_n}});
         // seems hit some bug/limitation in the template, need an explicit conversion here.
-        claim_act.send(eosio::name(*dest_acc));
+        claim_act.send(eosio::name(dest_acc));
     } else {
         eosio::check(false, "unsupported bridge_message version");
     }
@@ -435,8 +430,6 @@ void evmutil::onbridgemsg(const bridge_message_t &message) {
 
     const bridge_message_v0 &msg = std::get<bridge_message_v0>(message);
     check(msg.receiver == receiver_account(), "invalid message receiver");
-
-    
 
     // Locate regular claim address
     util_contract_table_t contract_table(_self, _self.value);
@@ -457,7 +450,6 @@ void evmutil::onbridgemsg(const bridge_message_t &message) {
 
         handle_endorser_stakes(msg, itr->erc20_precision - config.evm_gas_token_symbol.precision());
     }
-
 }
 
 void evmutil::transfer(eosio::name from, eosio::name to, eosio::asset quantity,
@@ -470,7 +462,7 @@ void evmutil::setdepfee(std::string proxy_address, const eosio::asset &fee) {
 
     config_t config = get_config();
 
-    eosio::check(fee.symbol == config.evm_gas_token_symbol, "egress_fee should have native token symbol");
+    eosio::check(fee.symbol == config.evm_gas_token_symbol, "deposit_fee should have native token symbol");
 
     auto address_bytes = from_hex(proxy_address);
     eosio::check(!!address_bytes, "token address must be valid 0x EVM address");
