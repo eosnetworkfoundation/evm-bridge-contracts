@@ -38,6 +38,9 @@ struct contracts {
 
     static std::vector<uint8_t> evm_stub_endrmng_wasm() { return read_wasm("${ANTELOPE_CONTRACTS_BINARY_DIR}/stubs/stub_endrmng.wasm"); }
     static std::vector<char> evm_stub_endrmng_abi() { return read_abi("${ANTELOPE_CONTRACTS_BINARY_DIR}/stubs/stub_endrmng.abi"); }
+
+    static std::vector<uint8_t> evm_stub_poolreg_wasm() { return read_wasm("${ANTELOPE_CONTRACTS_BINARY_DIR}/stubs/stub_poolreg.wasm"); }
+    static std::vector<char> evm_stub_poolreg_abi() { return read_abi("${ANTELOPE_CONTRACTS_BINARY_DIR}/stubs/stub_poolreg.abi"); }
 };
 }  // namespace testing
 }  // namespace eosio

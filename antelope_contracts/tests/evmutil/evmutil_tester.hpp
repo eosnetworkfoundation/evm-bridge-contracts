@@ -70,12 +70,18 @@ struct token_t {
 
     };
 
+struct util_contract_t {
+        uint64_t id = 0;
+        bytes address;  // <-- contract addr
+    };
+
 } // namespace evmutil_test
 
 FC_REFLECT(evmutil_test::exec_input, (context)(from)(to)(data)(value))
 FC_REFLECT(evmutil_test::exec_callback, (contract)(action))
 FC_REFLECT(evmutil_test::exec_output, (status)(data)(context))
 FC_REFLECT(evmutil_test::token_t, (id)(address)(token_address)(erc20_precision))
+FC_REFLECT(evmutil_test::util_contract_t, (id)(address))
 
 namespace evmutil_test {
 extern const eosio::chain::symbol eos_token_symbol;
@@ -129,6 +135,7 @@ class evmutil_tester : public eosio::testing::base_tester {
    static constexpr eosio::chain::name eos_system_account = "eosio"_n;
    static constexpr eosio::chain::name eos_token_account = "eosio.token"_n;
    static constexpr eosio::chain::name endrmng_account = "endrmng.xsat"_n;
+   static constexpr eosio::chain::name poolreg_account = "poolreg.xsat"_n;
    static constexpr eosio::chain::name btc_token_account = "btc.xsat"_n;
 
 

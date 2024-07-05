@@ -94,7 +94,7 @@ struct it_tester : evmutil_tester {
 
     std::string xbtc_address;
     std::string stake_address;
-    std::string reward_address;
+    std::string helper_address;
     evm_eoa evm1;
     it_tester() : evmutil_tester(true) {
         create_accounts({"alice"_n});
@@ -115,9 +115,8 @@ struct it_tester : evmutil_tester {
         stake_address = getSolidityContractAddress();
         BOOST_REQUIRE_MESSAGE(stake_address.size() == 42, std::string("address wrong: ") + stake_address);
 
-        //reward_address = getSolidityContractAddress2();
-        //BOOST_REQUIRE_MESSAGE(reward_address.size() == 42, std::string("address wrong: ") + reward_address);
-
+        helper_address = getHelperAddress();
+        BOOST_REQUIRE_MESSAGE(helper_address.size() == 42, std::string("address wrong: ") + helper_address);
 
         // init();
 
@@ -126,6 +125,12 @@ struct it_tester : evmutil_tester {
                     "reset"_n,
                     endrmng_account,
                     mvo()("proxy",make_key(proxy->bytes, 20))("staker",make_key(evm1.address.bytes, 20))("validator","alice"_n));
+        produce_block();
+
+        push_action(poolreg_account,
+                    "reset"_n,
+                    poolreg_account,
+                    mvo()("synchronizer","bob"_n));
         produce_block();
 
     }
@@ -151,6 +156,25 @@ struct it_tester : evmutil_tester {
             kv_obj->value.size());
         return r;
     }
+
+    std::string getHelperAddress() {
+        auto& db = const_cast<chainbase::database&>(control->db());
+
+        const auto* existing_tid = db.find<table_id_object, by_code_scope_table>(
+            boost::make_tuple(evmutil_account, evmutil_account, "utilcontract"_n));
+        if (!existing_tid) {
+            return {};
+        }
+        const auto* kv_obj = db.find<chain::key_value_object, chain::by_scope_primary>(
+            boost::make_tuple(existing_tid->id, 0));
+
+        util_contract_t r = fc::raw::unpack<util_contract_t>(
+            kv_obj->value.data(),
+            kv_obj->value.size());
+
+        return vec_to_hex(r.address, true);;
+    }
+
 
     intx::uint256 balanceOf(const char* owner, std::optional<exec_callback> callback = {}, std::optional<bytes> context = {}) {
         exec_input input;
@@ -345,6 +369,28 @@ struct it_tester : evmutil_tester {
         try {
             auto r = pushtx(txn);
             // dlog("action trace: ${a}", ("a", r));
+        } catch (...) {
+            from.next_nonce = old_nonce;
+            throw;
+        }
+    }
+
+    void claimSyncReward(evm_eoa& from, name validator) {
+        auto target = evmc::from_hex<evmc::address>(helper_address);
+        dlog(helper_address);
+        auto txn = generate_tx(*target, 0, 500'000);
+        // claim(address) = 1e83409a
+        txn.data = evmc::from_hex("0x1e83409a").value();
+        auto reserved_addr = silkworm::make_reserved_address(validator.to_uint64_t());
+
+        txn.data += evmc::from_hex(address_str32(reserved_addr)).value();      // param1 (to: address)
+
+        auto old_nonce = from.next_nonce;
+        from.sign(txn);
+
+        try {
+            auto r = pushtx(txn);
+             dlog("action trace: ${a}", ("a", r));
         } catch (...) {
             from.next_nonce = old_nonce;
             throw;
@@ -611,6 +657,26 @@ try {
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18))*2, std::string("balance: ") + intx::to_string(bal));
 
+
+}
+FC_LOG_AND_RETHROW()
+
+
+BOOST_FIXTURE_TEST_CASE(it_synchronizer_claim, it_tester)
+try {
+    
+    // Give evm1 some EOS
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), evm1.address_0x().c_str());
+
+    produce_block();
+    
+    BOOST_REQUIRE_EXCEPTION(
+        claimSyncReward(evm1, "alice"_n),
+        eosio_assert_message_exception, 
+        eosio_assert_message_is("synchronizer not found"));
+
+    
+    claimSyncReward(evm1, "bob"_n);
 
 }
 FC_LOG_AND_RETHROW()

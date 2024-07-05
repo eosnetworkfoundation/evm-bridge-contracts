@@ -142,7 +142,7 @@ evmutil_tester::evmutil_tester(bool use_real_evm, eosio::chain::name evm_account
 
     produce_block();
 
-    create_accounts({eos_token_account, evm_account, token_account, faucet_account_name, evmutil_account, btc_token_account, endrmng_account});
+    create_accounts({eos_token_account, evm_account, token_account, faucet_account_name, evmutil_account, btc_token_account, endrmng_account, poolreg_account});
 
     set_code(eos_token_account, testing::contracts::eosio_token_wasm());
     set_abi(eos_token_account, testing::contracts::eosio_token_abi().data());
@@ -218,6 +218,7 @@ evmutil_tester::evmutil_tester(bool use_real_evm, eosio::chain::name evm_account
         auto r = bridgereg(evmutil_account, evmutil_account, asset(0, symbol::from_string("8,BTC")));
         // dlog("action trace: ${a}", ("a", r));
         produce_block();
+
     } else {
         set_code(evm_account, testing::contracts::evm_stub_wasm());
         set_abi(evm_account, testing::contracts::evm_stub_abi().data());
@@ -236,6 +237,10 @@ evmutil_tester::evmutil_tester(bool use_real_evm, eosio::chain::name evm_account
 
     produce_block();
 
+    set_code(poolreg_account, testing::contracts::evm_stub_poolreg_wasm());
+    set_abi(poolreg_account, testing::contracts::evm_stub_poolreg_abi().data());
+
+    produce_block();
     
 
     evm_eoa deployer;

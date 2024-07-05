@@ -12,6 +12,7 @@ contract SyncRewardHelper  {
     constructor() {
         linkedEOSAccountName = "evmutil.xsat";
         linkedEOSAddress = 0xbbBbbbBbbBBbBBbBBBbbbBbB5530eA015740a800;
+        evmAddress = 0xBBbBbbbbbBbbbbBBBBbbbBbb56e40ee0D9000000;
     }
 
     function _isReservedAddress(address addr) internal pure returns (bool) {

@@ -101,14 +101,6 @@ class [[eosio::contract]] evmutil : public contract {
                                indexed_by<"by.address"_n, const_mem_fun<token_t, checksum256, &token_t::by_address> > >
         token_table_t;
 
-    struct [[eosio::table("egresslist")]] allowed_egress_account {
-        eosio::name account;
-
-        uint64_t primary_key() const { return account.value; }
-        EOSLIB_SERIALIZE(allowed_egress_account, (account));
-    };
-    typedef eosio::multi_index<"egresslist"_n, allowed_egress_account> egresslist_table_t;
-
     struct [[eosio::table("config")]] config_t {
         uint64_t      evm_gaslimit = default_evm_gaslimit;
         uint64_t      evm_init_gaslimit = default_evm_init_gaslimit;
