@@ -8,6 +8,14 @@ namespace poolreg {
 
     class contract_actions {
         public:  
+        /**
+         * @brief add slot action.
+         * @auth synchronizer->to or evmutil.xsat
+         *
+         * @param synchronizer - synchronizer account
+         *
+         */
+        [[eosio::action]]
         void claim(const name& synchronizer);
     };
 
