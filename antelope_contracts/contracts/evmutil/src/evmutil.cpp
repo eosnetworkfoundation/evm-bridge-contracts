@@ -141,9 +141,6 @@ void evmutil::deployimpls() {
 void evmutil::deployhelper() {
     require_auth(get_self());
 
-    uint64_t id = 0;
-    util_contract_table_t contract_table(_self, _self.value);
-    check(contract_table.find(id) == contract_table.end(), "implementation contract already deployed");
 
     bytes call_data;
 
@@ -162,14 +159,11 @@ void evmutil::deployhelper() {
     call_act.send(receiver_account(), to, value_zero, call_data, config.evm_init_gaslimit);
 
     evmc::address impl_addr = silkworm::create_address(reserved_addr, next_nonce); 
-
-    contract_table.emplace(_self, [&](auto &v) {
-        v.id = id;
-        v.address.resize(kAddressLength);
-        memcpy(&(v.address[0]), impl_addr.bytes, kAddressLength);
-    });
-
-
+    
+    helpers_t helpers = get_helpers();
+    helpers.sync_reward_helper_address.resize(kAddressLength);
+    memcpy(&(helpers.sync_reward_helper_address[0]), impl_addr.bytes, kAddressLength);
+    set_helpers(helpers);
 }
 
 void evmutil::setutilimpl(std::string impl_address) {
@@ -178,14 +172,11 @@ void evmutil::setutilimpl(std::string impl_address) {
     eosio::check(!!address_bytes, "implementation address must be valid 0x EVM address");
     eosio::check(address_bytes->size() == kAddressLength, "invalid length of implementation address");
 
-    uint64_t id = 0;
-    util_contract_table_t contract_table(_self, _self.value);
+    helpers_t helpers = get_helpers();
 
-    contract_table.emplace(_self, [&](auto &v) {
-        v.id = id;
-        v.address.resize(kAddressLength);
-        memcpy(&(v.address[0]), address_bytes->data(), kAddressLength);
-    });
+    helpers.sync_reward_helper_address.resize(kAddressLength);
+    memcpy(&(helpers.sync_reward_helper_address[0]), address_bytes->data(), kAddressLength);
+    set_helpers(helpers);
 }
 
 void evmutil::setstakeimpl(std::string impl_address) {
@@ -434,13 +425,9 @@ void evmutil::onbridgemsg(const bridge_message_t &message) {
     const bridge_message_v0 &msg = std::get<bridge_message_v0>(message);
     check(msg.receiver == receiver_account(), "invalid message receiver");
 
-    // Locate regular claim address
-    util_contract_table_t contract_table(_self, _self.value);
-    eosio::check(contract_table.begin() != contract_table.end(), "no implementaion contract available");
-    auto contract_itr = contract_table.end();
-    --contract_itr;
+    helpers_t helpers = get_helpers();
 
-    if (contract_itr->address == msg.sender) {
+    if (helpers.sync_reward_helper_address == msg.sender) {
         handle_sync_rewards(msg);
     }
     else {
@@ -567,6 +554,9 @@ void evmutil::init(eosio::name evm_account, eosio::symbol gas_token_symbol, uint
     config.evm_gaslimit = gaslimit;
     config.evm_init_gaslimit = init_gaslimit;
     set_config(config);
+
+    helpers_t helpers;
+    set_helpers(helpers);
 }
 
 void evmutil::setgaslimit(std::optional<uint64_t> gaslimit, std::optional<uint64_t> init_gaslimit) {

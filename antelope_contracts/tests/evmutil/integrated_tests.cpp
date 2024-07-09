@@ -161,18 +161,18 @@ struct it_tester : evmutil_tester {
         auto& db = const_cast<chainbase::database&>(control->db());
 
         const auto* existing_tid = db.find<table_id_object, by_code_scope_table>(
-            boost::make_tuple(evmutil_account, evmutil_account, "utilcontract"_n));
+            boost::make_tuple(evmutil_account, evmutil_account, "helpers"_n));
         if (!existing_tid) {
             return {};
         }
         const auto* kv_obj = db.find<chain::key_value_object, chain::by_scope_primary>(
-            boost::make_tuple(existing_tid->id, 0));
+            boost::make_tuple(existing_tid->id, "helpers"_n.to_uint64_t()));
 
-        util_contract_t r = fc::raw::unpack<util_contract_t>(
+        helpers_t r = fc::raw::unpack<helpers_t>(
             kv_obj->value.data(),
             kv_obj->value.size());
 
-        return vec_to_hex(r.address, true);;
+        return vec_to_hex(r.sync_reward_helper_address, true);;
     }
 
 

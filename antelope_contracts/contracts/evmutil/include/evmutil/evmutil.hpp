@@ -79,17 +79,12 @@ class [[eosio::contract]] evmutil : public contract {
     };
     typedef eosio::multi_index<"implcontract"_n, impl_contract_t> impl_contract_table_t;
 
-    struct [[eosio::table("utilcontract")]] util_contract_t {
-        uint64_t id = 0;
-        bytes address;
+    struct [[eosio::table("helpers")]] helpers_t {
+        bytes sync_reward_helper_address;
 
-        uint64_t primary_key() const {
-            return id;
-        }
-        EOSLIB_SERIALIZE(util_contract_t, (id)(address));
+        EOSLIB_SERIALIZE(helpers_t, (sync_reward_helper_address));
     };
-    typedef eosio::multi_index<"utilcontract"_n, util_contract_t> util_contract_table_t;
-
+    typedef eosio::singleton<"helpers"_n, helpers_t> helpers_singleton_t;
     struct [[eosio::table("tokens")]] token_t {
         uint64_t id = 0;
         bytes address;  // <-- proxy contract addr
@@ -137,6 +132,17 @@ class [[eosio::contract]] evmutil : public contract {
     void set_config(const config_t &v) {
         config_singleton_t config(get_self(), get_self().value);
         config.set(v, get_self());
+    }
+
+    helpers_t get_helpers() const {
+        helpers_singleton_t helpers(get_self(), get_self().value);
+        eosio::check(helpers.exists(), "evmutil config not exist");
+        return helpers.get();
+    }
+
+    void set_helpers(const helpers_t &v) {
+        helpers_singleton_t helpers(get_self(), get_self().value);
+        helpers.set(v, get_self());
     }
 
     uint64_t get_next_nonce();
