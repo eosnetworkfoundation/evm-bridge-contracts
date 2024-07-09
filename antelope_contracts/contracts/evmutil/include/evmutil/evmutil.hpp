@@ -22,6 +22,17 @@ checksum256 make_key(bytes data) {
     return make_key((const uint8_t *)data.data(), data.size());
 }
 
+checksum160 make_key160(const uint8_t *ptr, size_t len) {
+    uint8_t buffer[20] = {};
+    check(len <= sizeof(buffer), "len provided to make_key is too small");
+    memcpy(buffer, ptr, len);
+    return checksum160(buffer);
+}
+
+checksum160 make_key160(bytes data) {
+    return make_key160((const uint8_t *)data.data(), data.size());
+}
+
 class [[eosio::contract]] evmutil : public contract {
     public:
     using contract::contract;

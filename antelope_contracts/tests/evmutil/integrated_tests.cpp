@@ -306,17 +306,18 @@ struct it_tester : evmutil_tester {
         }
     }
 
-    void restake(evm_eoa& from, name validator, name new_validator) {
+    void restake(evm_eoa& from, name validator, name new_validator, intx::uint256 amount) {
         auto target = evmc::from_hex<evmc::address>(stake_address);
 
         auto txn = generate_tx(*target, 0, 500'000);
-        // restake(address,address) = 93e855a6
-        txn.data = evmc::from_hex("0x93e855a6").value();
+        // restake(address,address,uint256) = 441d2589
+        txn.data = evmc::from_hex("0x441d2589").value();
         auto reserved_addr = silkworm::make_reserved_address(validator.to_uint64_t());
         auto reserved_addr_to = silkworm::make_reserved_address(new_validator.to_uint64_t());
 
         txn.data += evmc::from_hex(address_str32(reserved_addr)).value();      // param1 (from: address)
         txn.data += evmc::from_hex(address_str32(reserved_addr_to)).value();      // param2 (to: address)
+        txn.data += evmc::from_hex(uint256_str32(amount)).value();  // param3 (amount: uint256)
 
         auto old_nonce = from.next_nonce;
         from.sign(txn);
@@ -622,7 +623,7 @@ try {
 
     produce_block();
 
-    restake(evm1, "alice"_n, "bob"_n);
+    restake(evm1, "alice"_n, "bob"_n, intx::exp(10_u256, intx::uint256(18)));
 
     withdraw(evm1,"bob"_n,  intx::exp(10_u256, intx::uint256(18)));
     produce_block();

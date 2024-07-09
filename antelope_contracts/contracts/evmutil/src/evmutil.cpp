@@ -328,7 +328,7 @@ void evmutil::handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delt
     // 0xdc4653f4 : f45346dc : deposit(address,uint256,address)
     // 0xec8d3269 : 69328dec : withdraw(address,uint256,address)
     // 0x42b3c021 : 21c0b342 : claim(address,address)
-    // 0x97fba943 : 43a9fb97 : restake(address,address,address)
+    // 0x2b7d501d : 1d507d2b : restake(address,address,address)
 
     if (app_type == 0x42b3c021) /* claim(address,address) */{
         check(msg.data.size() >= 4 + 32 /*to*/ + 32 /*from*/, 
@@ -341,7 +341,7 @@ void evmutil::handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delt
         readEvmAddress(msg.data, 4 + 32, sender_addr);
 
         endrmng::evmclaim_action evmclaim_act(config.endrmng_account, {{receiver_account(), "active"_n}});
-        evmclaim_act.send(make_key(msg.sender), make_key(sender_addr.bytes, kAddressLength), dest_acc);
+        evmclaim_act.send(get_self(), make_key160(msg.sender), make_key160(sender_addr.bytes, kAddressLength), dest_acc);
     } else if (app_type == 0xdc4653f4) /* deposit(address,uint256,address) */{
         check(msg.data.size() >= 4 + 32 + 32 + 32, 
             "not enough data in bridge_message_v0 of application type 0xdc4653f4");
@@ -356,7 +356,7 @@ void evmutil::handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delt
         readEvmAddress(msg.data, 4 + 32 + 32, sender_addr);
 
         endrmng::evmstake_action evmstake_act(config.endrmng_account, {{receiver_account(), "active"_n}});
-        evmstake_act.send(make_key(msg.sender),make_key(sender_addr.bytes, kAddressLength), dest_acc, dest_amount);
+        evmstake_act.send(get_self(), make_key160(msg.sender),make_key160(sender_addr.bytes, kAddressLength), dest_acc, eosio::asset(dest_amount, config.evm_gas_token_symbol));
     } else if (app_type == 0xec8d3269) /* withdraw(address,uint256,address) */ {
         check(msg.data.size() >= 4 + 32 + 32 + 32, 
             "not enough data in bridge_message_v0 of application type 0xec8d3269");
@@ -371,9 +371,9 @@ void evmutil::handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delt
         readEvmAddress(msg.data, 4 + 32 + 32, sender_addr);
         
         endrmng::evmunstake_action evmunstake_act(config.endrmng_account, {{receiver_account(), "active"_n}});
-        evmunstake_act.send(make_key(msg.sender), make_key(sender_addr.bytes, kAddressLength), dest_acc, dest_amount);
-    } else if (app_type == 0x97fba943) /* restake(address,address,address) */{
-        check(msg.data.size() >= 4 + 32 + 32 + 32, 
+        evmunstake_act.send(get_self(), make_key160(msg.sender), make_key160(sender_addr.bytes, kAddressLength), dest_acc, eosio::asset(dest_amount, config.evm_gas_token_symbol));
+    } else if (app_type == 0x2b7d501d) /* restake(address,address,uint256,address) */{
+        check(msg.data.size() >= 4 + 32 + 32 + 32 + 32, 
             "not enough data in bridge_message_v0 of application type 0x97fba943");
 
         uint64_t from_acc;
@@ -382,11 +382,14 @@ void evmutil::handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delt
         uint64_t to_acc;
         readExSatAccount(msg.data, 4 + 32, to_acc);
 
+        uint64_t dest_amount = 0;
+        readTokenAmount(msg.data, 4 + 32 + 32, dest_amount, delta_precision);
+
         evmc::address sender_addr;
-        readEvmAddress(msg.data, 4 + 32 + 32, sender_addr);
+        readEvmAddress(msg.data, 4 + 32 + 32 + 32, sender_addr);
 
         endrmng::evmnewstake_action evmnewstake_act(config.endrmng_account, {{receiver_account(), "active"_n}});
-        evmnewstake_act.send(make_key(msg.sender),make_key(sender_addr.bytes, kAddressLength), from_acc, to_acc);
+        evmnewstake_act.send(get_self(), make_key160(msg.sender),make_key160(sender_addr.bytes, kAddressLength), from_acc, to_acc, eosio::asset(dest_amount, config.evm_gas_token_symbol));
     } else {
         eosio::check(false, "unsupported bridge_message version");
     }

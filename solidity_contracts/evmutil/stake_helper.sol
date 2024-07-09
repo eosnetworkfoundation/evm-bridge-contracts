@@ -1448,23 +1448,22 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
 
     }
 
-    function restake(address _from, address _to) external {
-        StakeInfo storage stake = stakeInfo[_from][msg.sender];
+    function restake(address _from, address _to, uint256 _amount) external {
+        StakeInfo storage stakeFrom = stakeInfo[_from][msg.sender];
 
-        // Restake must take all!
-        uint256 amount = stake.amount;
-        stake.amount = 0;
+        require(_amount <= stakeFrom.amount, "Restake: cannot restake more than deposited amound");
 
         StakeInfo storage stakeTo = stakeInfo[_to][msg.sender];
 
-        if (amount > 0) {
-            stakeTo.amount = stakeTo.amount + amount;
+        if (_amount > 0) {
+            stakeFrom.amount = stakeFrom.amount - _amount;
+            stakeTo.amount = stakeTo.amount + _amount;
         }
 
         // The action is aynchronously viewed from EVM and looks UNSAFE.
         // BUT in fact the call will be executed as inline action.
         // If the cross chain call fail, the whole tx including the EVM action will be rejected.
-        bytes memory receiver_msg = abi.encodeWithSignature("restake(address,address,address)", _from, _to, msg.sender);
+        bytes memory receiver_msg = abi.encodeWithSignature("restake(address,address,uint256,address)", _from, _to, _amount, msg.sender);
         (bool success, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, receiver_msg ));
         if(!success) { revert(); }
     }
@@ -1480,6 +1479,8 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
 
     function withdraw(address _target, uint256 _amount) external {
         StakeInfo storage stake = stakeInfo[_target][msg.sender];
+
+        require(_amount <= stake.amount, "Withdraw: cannot withdraw more than deposited amound");
 
         if (_amount > 0) {
             stake.amount = stake.amount - _amount;
