@@ -264,7 +264,7 @@ evmutil_tester::evmutil_tester(bool use_real_evm, eosio::chain::name evm_account
         produce_block();
     }
 
-    push_action(evmutil_account, "deployhelper"_n, evmutil_account, mvo());
+    push_action(evmutil_account, "dpyrwdhelper"_n, evmutil_account, mvo());
 
     produce_block();
 

@@ -21,6 +21,8 @@ namespace eosio {
    }
 } // namespace eosio
 
+
+// Local helpers
 namespace {
 
 void readUint256(const evmutil::bytes &data, size_t offset, intx::uint256 &output) {
@@ -62,9 +64,6 @@ void readTokenAmount(const evmutil::bytes &data, size_t offset, uint64_t &output
     check(intx::uint256(output) == value && output < (1ull<<62)-1, "bridge amount value overflow");
     check(output > 0, "bridge amount must be positive");
 }
-} // namespace
-
-namespace evmutil {
 
 checksum256 get_code_hash(name account) {
     char buff[64];
@@ -84,10 +83,42 @@ inline uint128_t token_symbol_key(eosio::name token_contract, eosio::symbol_code
 }
 
 template <size_t Size>
-void initialize_data(bytes& output, const unsigned char (&arr)[Size]) {
+void initialize_data(evmutil::bytes& output, const unsigned char (&arr)[Size]) {
     static_assert(Size > 128); // ensure bytecode is compiled
     output.resize(Size);
     std::memcpy(output.data(), arr, Size);
+}
+
+} // namespace
+
+namespace evmutil {
+
+// Public Helpers
+
+config_t evmutil::get_config() const {
+    config_singleton_t config(get_self(), get_self().value);
+    eosio::check(config.exists(), "evmutil config not exist");
+    return config.get();
+}
+
+intx::uint256 evmutil::get_minimum_natively_representable(const config_t& config) const {
+    return intx::exp(10_u256, intx::uint256(evm_precision - config.evm_gas_token_symbol.precision()));
+}
+
+void evmutil::set_config(const config_t &v) {
+    config_singleton_t config(get_self(), get_self().value);
+    config.set(v, get_self());
+}
+
+helpers_t evmutil::get_helpers() const {
+    helpers_singleton_t helpers(get_self(), get_self().value);
+    eosio::check(helpers.exists(), "evmutil config not exist");
+    return helpers.get();
+}
+
+void evmutil::set_helpers(const helpers_t &v) {
+    helpers_singleton_t helpers(get_self(), get_self().value);
+    helpers.set(v, get_self());
 }
 
 // lookup nonce from the multi_index table of evm contract and assert
@@ -104,7 +135,9 @@ uint64_t evmutil::get_next_nonce() {
     return next_nonce;
 }
 
-void evmutil::deployimpls() {
+// Actions
+
+void evmutil::dpystakeimpl() {
     require_auth(get_self());
 
 
@@ -138,7 +171,7 @@ void evmutil::deployimpls() {
 
 }
 
-void evmutil::deployhelper() {
+void evmutil::dpyrwdhelper() {
     require_auth(get_self());
 
 
@@ -166,7 +199,7 @@ void evmutil::deployhelper() {
     set_helpers(helpers);
 }
 
-void evmutil::setutilimpl(std::string impl_address) {
+void evmutil::setrwdhelper(std::string impl_address) {
     require_auth(get_self());
     auto address_bytes = from_hex(impl_address);
     eosio::check(!!address_bytes, "implementation address must be valid 0x EVM address");
@@ -281,7 +314,7 @@ void evmutil::regtokenwithcodebytes(const bytes& erc20_address_bytes, const byte
     });
 }
 
-[[eosio::action]] void evmutil::regwithcode(std::string token_address, std::string impl_address, const eosio::asset &dep_fee, uint8_t erc20_precision) {
+void evmutil::regwithcode(std::string token_address, std::string impl_address, const eosio::asset &dep_fee, uint8_t erc20_precision) {
     require_auth(get_self());
     auto address_bytes = from_hex(impl_address);
     eosio::check(!!address_bytes, "implementation address must be valid 0x EVM address");
@@ -294,7 +327,7 @@ void evmutil::regtokenwithcodebytes(const bytes& erc20_address_bytes, const byte
     regtokenwithcodebytes(*token_address_bytes, *address_bytes, dep_fee, erc20_precision);
 }
 
-[[eosio::action]] void evmutil::regtoken(std::string token_address, const eosio::asset &dep_fee, uint8_t erc20_precision) {
+void evmutil::regtoken(std::string token_address, const eosio::asset &dep_fee, uint8_t erc20_precision) {
     require_auth(get_self());
     
     impl_contract_table_t contract_table(_self, _self.value);
@@ -307,6 +340,21 @@ void evmutil::regtokenwithcodebytes(const bytes& erc20_address_bytes, const byte
     eosio::check(token_address_bytes->size() == kAddressLength, "invalid length of token address");
 
     regtokenwithcodebytes(*token_address_bytes, contract_itr->address, dep_fee, erc20_precision);
+}
+
+void evmutil::unregtoken(std::string proxy_address) {
+    require_auth(get_self());
+
+    auto proxy_address_bytes = from_hex(proxy_address);
+    eosio::check(!!proxy_address_bytes, "token address must be valid 0x EVM address");
+    eosio::check(proxy_address_bytes->size() == kAddressLength, "invalid length of token address");
+
+    token_table_t token_table(_self, _self.value);
+    auto index_symbol = token_table.get_index<"by.tokenaddr"_n>();
+    auto token_table_iter = index_symbol.find(make_key(*proxy_address_bytes));
+    eosio::check(token_table_iter != index_symbol.end(), "token not registered");
+
+    index_symbol.erase(token_table_iter);
 }
 
 void evmutil::handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delta_precision) {
@@ -417,6 +465,11 @@ void evmutil::handle_sync_rewards(const bridge_message_v0 &msg) {
     }
 }
 
+void evmutil::transfer(eosio::name from, eosio::name to, eosio::asset quantity,
+                     std::string memo) {
+    eosio::check(false, "this address should not accept tokens");
+}
+
 void evmutil::onbridgemsg(const bridge_message_t &message) {
     config_t config = get_config();
 
@@ -442,9 +495,34 @@ void evmutil::onbridgemsg(const bridge_message_t &message) {
     }
 }
 
-void evmutil::transfer(eosio::name from, eosio::name to, eosio::asset quantity,
-                     std::string memo) {
-    eosio::check(false, "this address should not accept tokens");
+void evmutil::init(eosio::name evm_account, eosio::symbol gas_token_symbol, uint64_t gaslimit, uint64_t init_gaslimit) {
+    require_auth(get_self());
+
+    config_singleton_t config_table(get_self(), get_self().value);
+    eosio::check(!config_table.exists(), "evmutil config already initialized");
+
+    config_t config;
+    token_table_t token_table(_self, _self.value);
+    if (token_table.begin() != token_table.end()) {
+        eosio::check(evm_account == default_evm_account && gas_token_symbol == default_native_token_symbol, "can only init with native EOS symbol");
+    }
+    config.evm_account = evm_account;
+    config.evm_gas_token_symbol = gas_token_symbol;
+    config.evm_gaslimit = gaslimit;
+    config.evm_init_gaslimit = init_gaslimit;
+    set_config(config);
+
+    helpers_t helpers;
+    set_helpers(helpers);
+}
+
+void evmutil::setgaslimit(std::optional<uint64_t> gaslimit, std::optional<uint64_t> init_gaslimit) {
+    require_auth(get_self());
+
+    config_t config = get_config();
+    if (gaslimit.has_value()) config.evm_gaslimit = *gaslimit;
+    if (init_gaslimit.has_value()) config.evm_init_gaslimit = *init_gaslimit;
+    set_config(config);
 }
 
 void evmutil::setdepfee(std::string proxy_address, const eosio::asset &fee) {
@@ -521,51 +599,6 @@ void evmutil::setlocktime(std::string proxy_address, uint64_t locktime) {
 
     evm_runtime::call_action call_act(config.evm_account, {{receiver_account(), "active"_n}});
     call_act.send(receiver_account(), token_table_iter->address, value_zero, call_data, config.evm_gaslimit);
-}
-
-void evmutil::unregtoken(std::string proxy_address) {
-    require_auth(get_self());
-
-    auto proxy_address_bytes = from_hex(proxy_address);
-    eosio::check(!!proxy_address_bytes, "token address must be valid 0x EVM address");
-    eosio::check(proxy_address_bytes->size() == kAddressLength, "invalid length of token address");
-
-    token_table_t token_table(_self, _self.value);
-    auto index_symbol = token_table.get_index<"by.tokenaddr"_n>();
-    auto token_table_iter = index_symbol.find(make_key(*proxy_address_bytes));
-    eosio::check(token_table_iter != index_symbol.end(), "token not registered");
-
-    index_symbol.erase(token_table_iter);
-}
-
-void evmutil::init(eosio::name evm_account, eosio::symbol gas_token_symbol, uint64_t gaslimit, uint64_t init_gaslimit) {
-    require_auth(get_self());
-
-    config_singleton_t config_table(get_self(), get_self().value);
-    eosio::check(!config_table.exists(), "evmutil config already initialized");
-
-    config_t config;
-    token_table_t token_table(_self, _self.value);
-    if (token_table.begin() != token_table.end()) {
-        eosio::check(evm_account == default_evm_account && gas_token_symbol == default_native_token_symbol, "can only init with native EOS symbol");
-    }
-    config.evm_account = evm_account;
-    config.evm_gas_token_symbol = gas_token_symbol;
-    config.evm_gaslimit = gaslimit;
-    config.evm_init_gaslimit = init_gaslimit;
-    set_config(config);
-
-    helpers_t helpers;
-    set_helpers(helpers);
-}
-
-void evmutil::setgaslimit(std::optional<uint64_t> gaslimit, std::optional<uint64_t> init_gaslimit) {
-    require_auth(get_self());
-
-    config_t config = get_config();
-    if (gaslimit.has_value()) config.evm_gaslimit = *gaslimit;
-    if (init_gaslimit.has_value()) config.evm_init_gaslimit = *init_gaslimit;
-    set_config(config);
 }
 
 inline eosio::name evmutil::receiver_account()const {
