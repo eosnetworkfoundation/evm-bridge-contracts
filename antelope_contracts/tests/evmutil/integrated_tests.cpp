@@ -370,6 +370,28 @@ struct it_tester : evmutil_tester {
         }
     }
 
+    void claim(evm_eoa& from, name validator) {
+        auto target = evmc::from_hex<evmc::address>(stake_address);
+
+        auto txn = generate_tx(*target, 0, 500'000);
+        // claim(address) = 1e83409a
+        txn.data = evmc::from_hex("0x1e83409a").value();
+        auto reserved_addr = silkworm::make_reserved_address(validator.to_uint64_t());
+
+        txn.data += evmc::from_hex(address_str32(reserved_addr)).value();      // param1 (to: address)
+
+        auto old_nonce = from.next_nonce;
+        from.sign(txn);
+
+        try {
+            auto r = pushtx(txn);
+            // dlog("action trace: ${a}", ("a", r));
+        } catch (...) {
+            from.next_nonce = old_nonce;
+            throw;
+        }
+    }
+
     void claimPendingFunds(evm_eoa& from, name validator) {
         auto target = evmc::from_hex<evmc::address>(stake_address);
 
@@ -518,6 +540,14 @@ try {
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
 
+    produce_block();
+
+    BOOST_REQUIRE_EXCEPTION(
+        claim(evm1, "bob"_n),
+        eosio_assert_message_exception, 
+        eosio_assert_message_is("validator not found"));
+
+    claim(evm1, "alice"_n);
     produce_block();
 
     withdraw(evm1,"alice"_n,  intx::exp(10_u256, intx::uint256(18)));
