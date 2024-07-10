@@ -467,7 +467,7 @@ void evmutil::handle_sync_rewards(const bridge_message_v0 &msg) {
 
 void evmutil::transfer(eosio::name from, eosio::name to, eosio::asset quantity,
                      std::string memo) {
-    eosio::check(false, "this address should not accept tokens");
+    eosio::check(false, "this address should not accept or send tokens");
 }
 
 void evmutil::onbridgemsg(const bridge_message_t &message) {

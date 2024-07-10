@@ -8,7 +8,7 @@ namespace endrmng {
 
     class contract_actions {
         public:
-        /*
+        /**
         * Evm stake action.
         * @auth scope is `evmcaller` whitelist account
         *
@@ -24,7 +24,7 @@ namespace endrmng {
                     const asset& quantity);
         
 
-        /*
+        /**
         * Evm unstake action.
         * @auth scope is evmcaller whitelist account
         *
@@ -39,7 +39,7 @@ namespace endrmng {
         void evmunstake(const name& caller, const checksum160& proxy, const checksum160& staker, const name& validator,
                         const asset& quantity);
 
-        /*
+        /**
         * Evm change stake action.
         * @auth scope is `evmcaller` whitelist account
         *
@@ -55,7 +55,7 @@ namespace endrmng {
         void evmnewstake(const name& caller, const checksum160& proxy, const checksum160& staker, const name& old_validator,
                         const name& new_validator, const asset& quantity);
 
-        /*
+        /**
         * Evm claim reward action.
         * @auth scope is evmcaller whitelist account
         *
