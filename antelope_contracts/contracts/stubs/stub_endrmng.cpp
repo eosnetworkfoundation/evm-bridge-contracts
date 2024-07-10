@@ -109,7 +109,9 @@ class [[eosio::contract]] stub_endrmng : public contract {
     */
     [[eosio::action]]
     void evmclaim(const name& caller, const checksum160& proxy, const checksum160& staker, const name& validator);
-    [[eosio::action]] void reset(const checksum160& proxy, const checksum160& staker, const name& validator);  
+    [[eosio::action]] void reset(const checksum160& proxy, const checksum160& staker, const name& validator);
+    [[eosio::action]] void assertstake(uint64_t stake);
+    [[eosio::action]] void assertval(const name& validator);  
 };
 
 void stub_endrmng::evmstake(const name& caller, const checksum160& proxy, const checksum160& staker, const name& validator, const asset& quantity) {
@@ -168,6 +170,16 @@ void stub_endrmng::reset(const checksum160& proxy, const checksum160& staker, co
     config.stake = 0;
 
     set_config(config);
+}
+
+void stub_endrmng::assertstake(uint64_t stake) {
+    config_t config = get_config();
+    check(stake == config.stake, "stake not correct" );
+}
+
+void stub_endrmng::assertval(const name& validator) {
+    config_t config = get_config();
+    check(validator == config.validator, "validator not correct" );
 }
 
 

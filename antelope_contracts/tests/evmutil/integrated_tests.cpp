@@ -135,6 +135,22 @@ struct it_tester : evmutil_tester {
 
     }
 
+    void assertstake(uint64_t stake) {
+        push_action(endrmng_account,
+                    "assertstake"_n,
+                    endrmng_account,
+                    mvo()("stake",stake));
+        produce_block();
+    }
+
+    void assertval(name validator) {
+        push_action(endrmng_account,
+                    "assertval"_n,
+                    endrmng_account,
+                    mvo()("validator",validator));
+        produce_block();
+    }
+
     std::string getSolidityContractAddress() {
         auto r = getRegistedTokenInfo();
         return vec_to_hex(r.address, true);
@@ -391,7 +407,7 @@ struct it_tester : evmutil_tester {
 
         try {
             auto r = pushtx(txn);
-             dlog("action trace: ${a}", ("a", r));
+            // dlog("action trace: ${a}", ("a", r));
         } catch (...) {
             from.next_nonce = old_nonce;
             throw;
@@ -492,8 +508,12 @@ try {
     auto fee = depFee();
     produce_block();
 
+    assertstake(0);
+
     stake(evm1, "alice"_n, intx::exp(10_u256, intx::uint256(18)), fee);
     produce_block();
+
+    assertstake(1'00000000);
 
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
@@ -502,6 +522,8 @@ try {
 
     withdraw(evm1,"alice"_n,  intx::exp(10_u256, intx::uint256(18)));
     produce_block();
+
+    assertstake(0);
 
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
@@ -544,8 +566,12 @@ try {
     auto fee = depFee();
     produce_block();
 
+    assertstake(0);
+
     stake(evm1, "alice"_n, intx::exp(10_u256, intx::uint256(18)), fee);
     produce_block();
+
+    assertstake(1'00000000);
 
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
@@ -554,6 +580,8 @@ try {
 
     withdraw(evm1,"alice"_n,  intx::exp(10_u256, intx::uint256(18)));
     produce_block();
+
+    assertstake(0);
 
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
@@ -615,8 +643,13 @@ try {
     auto fee = depFee();
     produce_block();
 
+    assertstake(0);
+
     stake(evm1, "alice"_n, intx::exp(10_u256, intx::uint256(18)), fee);
     produce_block();
+
+    assertstake(1'00000000);
+    assertval("alice"_n);
 
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
@@ -624,9 +657,19 @@ try {
     produce_block();
 
     restake(evm1, "alice"_n, "bob"_n, intx::exp(10_u256, intx::uint256(18)));
+    produce_block();
+
+    BOOST_REQUIRE_EXCEPTION(
+        assertval("alice"_n),
+        eosio_assert_message_exception, 
+        eosio_assert_message_is("validator not correct"));
+
+    assertval("bob"_n);
 
     withdraw(evm1,"bob"_n,  intx::exp(10_u256, intx::uint256(18)));
     produce_block();
+
+    assertstake(0);
 
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
