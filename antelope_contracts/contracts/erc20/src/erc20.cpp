@@ -100,7 +100,7 @@ void erc20::upgradeto(std::string impl_address) {
     impl_contract_table_t contract_table(_self, _self.value);
 
     contract_table.emplace(_self, [&](auto &v) {
-        v.id = id;
+        v.id = contract_table.available_primary_key();
         v.address.resize(kAddressLength);
         memcpy(&(v.address[0]), address_bytes->data(), kAddressLength);
     });
