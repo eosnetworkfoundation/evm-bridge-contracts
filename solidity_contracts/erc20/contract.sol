@@ -1496,9 +1496,9 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
                           ) initializer public {
         __ERC20_init(_name, _symbol);
         __UUPSUpgradeable_init();
-        evmAddress = 0xBBbBbbbbbBbbbbBBBBbbbBbb56e40ee0D9000000;
-        linkedEOSAddress = 0xBbbBBBBbBbbBbbbbBBBBbBbb56e5ACba20ee0D90;
-        linkedEOSAccountName = "evmutil.xsat";
+        evmAddress = 0xbBBBbBbbbBBBBbbbbbbBBbBB5530EA015b900000;
+        linkedEOSAddress = 0xbbBbbbBbbBBbBBbBBBbbbBbB5530eA015740a800;
+        linkedEOSAccountName = "eosio.erc2o";
         precision = _precision;
         egressFee = _egressFee;
         eos_token_contract = _eos_token_contract;
