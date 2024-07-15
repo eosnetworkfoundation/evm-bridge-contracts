@@ -28,5 +28,12 @@ contract SyncRewardHelper  {
         if(!success) { revert(); }
     }
 
-
+    function vdrclaim(address _target) external {
+        // The action is aynchronously viewed from EVM and looks UNSAFE.
+        // BUT in fact the call will be executed as inline action.
+        // If the cross chain call fail, the whole tx including the EVM action will be rejected.
+        bytes memory receiver_msg = abi.encodeWithSignature("vdrclaim(address,address)", _target, msg.sender);
+        (bool success, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, receiver_msg ));
+        if(!success) { revert(); }
+    }
 }

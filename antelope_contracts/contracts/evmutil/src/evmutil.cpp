@@ -446,6 +446,7 @@ void evmutil::handle_sync_rewards(const bridge_message_v0 &msg) {
     memcpy((void *)&app_type, (const void *)&(msg.data[0]), sizeof(app_type));
     
     // 0x42b3c021 : 21c0b342 : claim(address,address)
+    // 0xc16fb607 : 07b66fc1 : vdrclaim(address,address)
 
     if (app_type == 0x42b3c021) {
         check(msg.data.size() >= 4 + 32 /*to*/ + 32 /*from*/, 
@@ -460,6 +461,21 @@ void evmutil::handle_sync_rewards(const bridge_message_v0 &msg) {
         poolreg::claim_action claim_act(config.poolreg_account, {{receiver_account(), "active"_n}});
         // seems hit some bug/limitation in the template, need an explicit conversion here.
         claim_act.send(eosio::name(dest_acc));
+    } else if (app_type == 0xc16fb607) {
+        check(msg.data.size() >= 4 + 32 /*to*/ + 32 /*from*/, 
+            "not enough data in bridge_message_v0 of application type 0x653332e5");
+
+        uint64_t dest_acc;
+        readExSatAccount(msg.data, 4, dest_acc);
+
+        // Note that there's a second argument in the call for the sender address.
+        // We currently do not use it. But we collect in the bridge call in case we want to add more sanity checks here.
+
+        endrmng::vdrclaim_action vdrclaim_act(config.endrmng_account, {{receiver_account(), "active"_n}});
+        // seems hit some bug/limitation in the template, need an explicit conversion here.
+        vdrclaim_act.send(eosio::name(dest_acc));
+    
+    
     } else {
         eosio::check(false, "unsupported bridge_message version");
     }
