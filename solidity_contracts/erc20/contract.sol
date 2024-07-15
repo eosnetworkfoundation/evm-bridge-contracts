@@ -1498,15 +1498,38 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
         __UUPSUpgradeable_init();
         evmAddress = block.coinbase;
         linkedEOSAddress = msg.sender;
-
-        if (linkedEOSAddress == 0xbbBbbbBbbBBbBBbBBBbbbBbB5530eA015740a800)
-            linkedEOSAccountName = "eosio.erc2o";
-        else 
-            linkedEOSAccountName = "erc2o.xsat";
+        linkedEOSAccountName = _addressToName(linkedEOSAddress);
 
         precision = _precision;
         egressFee = _egressFee;
         eos_token_contract = _eos_token_contract;
+    }
+
+    function _addressToName(address input ) internal pure returns (string memory) {
+        uint64 a = uint64(uint160(input));
+        bytes memory bstr = new bytes(12);
+
+        uint count = 0;
+        for (uint i = 0; i < 12 ; i++) {
+            uint64 c = (a >> (64 - 5*(i+1))) & uint64(31);
+            if (c == 0) {
+                bstr[i] = bytes1(uint8(46)); // .
+            }
+            else if (c <= 5) {
+                bstr[i] = bytes1(uint8(c + 48)); // '0' + b
+                count = i + 1;
+            }
+            else {
+                bstr[i] = bytes1(uint8(c - 6 + 97)); // 'a' + b - 6
+                count = i + 1;
+            }
+        }
+
+        bytes memory bstrTrimmed = new bytes(count);
+        for (uint j = 0; j < count; j++) {
+            bstrTrimmed[j] = bstr[j];
+        }
+        return string(bstrTrimmed);
     }
 
     function setFee(uint256 _egressFee) public {

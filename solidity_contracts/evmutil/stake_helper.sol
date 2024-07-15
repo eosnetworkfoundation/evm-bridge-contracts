@@ -1371,12 +1371,39 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         __UUPSUpgradeable_init();
 
         linkedERC20 = _linkedERC20;
-        linkedEOSAccountName = "evmutil.xsat";
-        linkedEOSAddress = 0xBbbBBBBbBbbBbbbbBBBBbBbb56e5ACba20ee0D90;
-        evmAddress = 0xBBbBbbbbbBbbbbBBBBbbbBbb56e40ee0D9000000;
-        depositFee = _depositFee;
+        evmAddress = block.coinbase;
+        linkedEOSAddress = msg.sender;
+        linkedEOSAccountName = _addressToName(linkedEOSAddress);
+
         lockTime = 2419200; // 28 days
         maxPendingQueueSize = 50; // A limit that normally will not be hit. Sort of last defence.
+    }
+
+    function _addressToName(address input ) internal pure returns (string memory) {
+        uint64 a = uint64(uint160(input));
+        bytes memory bstr = new bytes(12);
+
+        uint count = 0;
+        for (uint i = 0; i < 12 ; i++) {
+            uint64 c = (a >> (64 - 5*(i+1))) & uint64(31);
+            if (c == 0) {
+                bstr[i] = bytes1(uint8(46)); // .
+            }
+            else if (c <= 5) {
+                bstr[i] = bytes1(uint8(c + 48)); // '0' + b
+                count = i + 1;
+            }
+            else {
+                bstr[i] = bytes1(uint8(c - 6 + 97)); // 'a' + b - 6
+                count = i + 1;
+            }
+        }
+
+        bytes memory bstrTrimmed = new bytes(count);
+        for (uint j = 0; j < count; j++) {
+            bstrTrimmed[j] = bstr[j];
+        }
+        return string(bstrTrimmed);
     }
 
     function _authorizeUpgrade(address) internal virtual override {
