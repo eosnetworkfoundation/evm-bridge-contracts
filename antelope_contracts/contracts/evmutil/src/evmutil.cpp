@@ -5,7 +5,7 @@
 #include <evmutil/endrmng.hpp>
 #include <evmutil/poolreg.hpp>
 
-#include <evmutil/sync_reward_helper_bytecode.hpp>
+#include <evmutil/reward_helper_bytecode.hpp>
 #include <evmutil/stake_helper_bytecode.hpp>
 #include <erc20/proxy_bytecode.hpp>
 
@@ -178,7 +178,7 @@ void evmutil::dpyrwdhelper() {
     bytes call_data;
 
     auto reserved_addr = silkworm::make_reserved_address(receiver_account().value);
-    initialize_data(call_data, solidity::syncrewardhelper::bytecode);
+    initialize_data(call_data, solidity::rewardhelper::bytecode);
 
     bytes to = {};
     bytes value_zero; 
@@ -194,8 +194,8 @@ void evmutil::dpyrwdhelper() {
     evmc::address impl_addr = silkworm::create_address(reserved_addr, next_nonce); 
     
     helpers_t helpers = get_helpers();
-    helpers.sync_reward_helper_address.resize(kAddressLength);
-    memcpy(&(helpers.sync_reward_helper_address[0]), impl_addr.bytes, kAddressLength);
+    helpers.reward_helper_address.resize(kAddressLength);
+    memcpy(&(helpers.reward_helper_address[0]), impl_addr.bytes, kAddressLength);
     set_helpers(helpers);
 }
 
@@ -207,8 +207,8 @@ void evmutil::setrwdhelper(std::string impl_address) {
 
     helpers_t helpers = get_helpers();
 
-    helpers.sync_reward_helper_address.resize(kAddressLength);
-    memcpy(&(helpers.sync_reward_helper_address[0]), address_bytes->data(), kAddressLength);
+    helpers.reward_helper_address.resize(kAddressLength);
+    memcpy(&(helpers.reward_helper_address[0]), address_bytes->data(), kAddressLength);
     set_helpers(helpers);
 }
 
@@ -443,7 +443,7 @@ void evmutil::handle_utxo_access(const bridge_message_v0 &msg) {
 
 }
 
-void evmutil::handle_sync_rewards(const bridge_message_v0 &msg) {
+void evmutil::handle_rewards(const bridge_message_v0 &msg) {
     config_t config = get_config();
     check(msg.data.size() >= 4, "not enough data in bridge_message_v0");
 
@@ -502,8 +502,8 @@ void evmutil::onbridgemsg(const bridge_message_t &message) {
 
     helpers_t helpers = get_helpers();
 
-    if (helpers.sync_reward_helper_address == msg.sender) {
-        handle_sync_rewards(msg);
+    if (helpers.reward_helper_address == msg.sender) {
+        handle_rewards(msg);
     }
     else {
         checksum256 addr_key = make_key(msg.sender);

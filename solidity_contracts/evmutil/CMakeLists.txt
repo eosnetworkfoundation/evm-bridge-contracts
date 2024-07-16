@@ -8,12 +8,12 @@ generate_solidity_bytecode_target(
 
 # Not necessarily used in code, but it's good to be here.
 generate_solidity_bytecode_target(
-   CONTRACT_NAME SyncRewardHelper
-   CONTRACT_SOURCE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/sync_reward_helper.sol"
-   CONTRACT_NAMESPACE "syncrewardhelper"
-   BYTECODE_HEADER_OUTPUT_PATH "${SOLIDITY_BYTECODES_DIR}/evmutil/sync_reward_helper_bytecode.hpp"
+   CONTRACT_NAME RewardHelper
+   CONTRACT_SOURCE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/reward_helper.sol"
+   CONTRACT_NAMESPACE "rewardhelper"
+   BYTECODE_HEADER_OUTPUT_PATH "${SOLIDITY_BYTECODES_DIR}/evmutil/reward_helper_bytecode.hpp"
 )
 add_custom_target(GenerateEvmUtilBytecode ALL
    DEPENDS StakeHelper
-   DEPENDS SyncRewardHelper
+   DEPENDS RewardHelper
 )

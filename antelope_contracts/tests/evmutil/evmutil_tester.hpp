@@ -71,7 +71,7 @@ struct token_t {
     };
 
 struct helpers_t {
-        bytes sync_reward_helper_address;  // <-- contract addr
+        bytes reward_helper_address;  // <-- contract addr
     };
 
 } // namespace evmutil_test
@@ -80,7 +80,7 @@ FC_REFLECT(evmutil_test::exec_input, (context)(from)(to)(data)(value))
 FC_REFLECT(evmutil_test::exec_callback, (contract)(action))
 FC_REFLECT(evmutil_test::exec_output, (status)(data)(context))
 FC_REFLECT(evmutil_test::token_t, (id)(address)(token_address)(erc20_precision))
-FC_REFLECT(evmutil_test::helpers_t, (sync_reward_helper_address))
+FC_REFLECT(evmutil_test::helpers_t, (reward_helper_address))
 
 namespace evmutil_test {
 extern const eosio::chain::symbol eos_token_symbol;

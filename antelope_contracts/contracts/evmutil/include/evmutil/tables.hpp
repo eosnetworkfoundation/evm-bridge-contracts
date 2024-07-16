@@ -21,9 +21,9 @@ namespace evmutil {
     typedef eosio::multi_index<"implcontract"_n, impl_contract_t> impl_contract_table_t;
 
     struct [[eosio::table("helpers")]] [[eosio::contract("evmutil")]] helpers_t {
-        bytes sync_reward_helper_address;
+        bytes reward_helper_address;
 
-        EOSLIB_SERIALIZE(helpers_t, (sync_reward_helper_address));
+        EOSLIB_SERIALIZE(helpers_t, (reward_helper_address));
     };
     typedef eosio::singleton<"helpers"_n, helpers_t> helpers_singleton_t;
     struct [[eosio::table("tokens")]] [[eosio::contract("evmutil")]] token_t {

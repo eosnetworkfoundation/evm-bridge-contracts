@@ -175,7 +175,7 @@ private:
 
     void handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delta_precision);
     void handle_utxo_access(const bridge_message_v0 &msg);
-    void handle_sync_rewards(const bridge_message_v0 &msg);
+    void handle_rewards(const bridge_message_v0 &msg);
 
     eosio::name receiver_account()const;
 };

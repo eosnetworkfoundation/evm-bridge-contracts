@@ -188,7 +188,7 @@ struct it_tester : evmutil_tester {
             kv_obj->value.data(),
             kv_obj->value.size());
 
-        return vec_to_hex(r.sync_reward_helper_address, true);;
+        return vec_to_hex(r.reward_helper_address, true);;
     }
 
 
