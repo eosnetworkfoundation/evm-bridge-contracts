@@ -1488,7 +1488,9 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
      address public evmAddress;
      uint8   public precision;
      uint256 public egressFee;
-     function initialize(uint8   _precision,
+     function initialize(address _linkedEOSAddress,
+                         address _evmAddress,
+                         uint8   _precision,
                          uint256 _egressFee,
                          string memory _name, 
                          string memory _symbol,
@@ -1496,8 +1498,8 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
                           ) initializer public {
         __ERC20_init(_name, _symbol);
         __UUPSUpgradeable_init();
-        evmAddress = block.coinbase;
-        linkedEOSAddress = msg.sender;
+        evmAddress = _evmAddress;
+        linkedEOSAddress = _linkedEOSAddress;
         linkedEOSAccountName = _addressToName(linkedEOSAddress);
 
         precision = _precision;
@@ -1505,7 +1507,8 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
         eos_token_contract = _eos_token_contract;
     }
 
-    function _addressToName(address input ) internal pure returns (string memory) {
+    function _addressToName(address input) internal pure returns (string memory) {
+        require(_isReservedAddress(input));
         uint64 a = uint64(uint160(input));
         bytes memory bstr = new bytes(12);
 
