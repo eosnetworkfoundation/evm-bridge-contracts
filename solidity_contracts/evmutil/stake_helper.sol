@@ -1374,7 +1374,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         evmAddress = _evmAddress;
         linkedEOSAddress = _linkedEOSAddress;
         linkedEOSAccountName = _addressToName(linkedEOSAddress);
-
+        depositFee = _depositFee;
         lockTime = 2419200; // 28 days
         maxPendingQueueSize = 50; // A limit that normally will not be hit. Sort of last defence.
     }
