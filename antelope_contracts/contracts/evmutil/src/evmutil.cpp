@@ -249,6 +249,7 @@ void evmutil::regtokenwithcodebytes(const bytes& erc20_address_bytes, const byte
     check(index_symbol.find(make_key(erc20_address_bytes)) == index_symbol.end(), "token already registered");
 
     auto reserved_addr = silkworm::make_reserved_address(receiver_account().value);
+    auto evm_reserved_addr = silkworm::make_reserved_address(config.evm_account.value);
 
     bytes call_data;
     initialize_data(call_data, solidity::proxy::bytecode);
@@ -258,8 +259,8 @@ void evmutil::regtokenwithcodebytes(const bytes& erc20_address_bytes, const byte
     call_data.insert(call_data.end(), impl_address_bytes.begin(), impl_address_bytes.end());
 
     bytes constructor_data;
-    // initialize(address,uint256) => cd6dc687
-    uint8_t func_[4] = {0xcd,0x6d,0xc6,0x87};
+    // initialize(address,address,address,uint256) => cf756fdf
+    uint8_t func_[4] = {0xcf,0x75,0x6f,0xdf};
     constructor_data.insert(constructor_data.end(), func_, func_ + sizeof(func_));
 
     auto pack_uint256 = [&](bytes &ds, const intx::uint256 &val) {
@@ -284,6 +285,10 @@ void evmutil::regtokenwithcodebytes(const bytes& erc20_address_bytes, const byte
         }
     };
     
+    constructor_data.insert(constructor_data.end(), 32 - kAddressLength, 0);  // padding for address
+    constructor_data.insert(constructor_data.end(), reserved_addr.bytes, reserved_addr.bytes + kAddressLength); 
+    constructor_data.insert(constructor_data.end(), 32 - kAddressLength, 0);  // padding for address
+    constructor_data.insert(constructor_data.end(), evm_reserved_addr.bytes, evm_reserved_addr.bytes + kAddressLength); 
     constructor_data.insert(constructor_data.end(), 32 - kAddressLength, 0);  // padding for address
     constructor_data.insert(constructor_data.end(), erc20_address_bytes.begin(), erc20_address_bytes.end());
 

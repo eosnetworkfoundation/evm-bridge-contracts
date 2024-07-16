@@ -1367,12 +1367,12 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
 
     mapping(address => mapping(address => StakeInfo)) public stakeInfo;
 
-    function initialize(IERC20 _linkedERC20, uint256 _depositFee) initializer public {
+    function initialize(address _linkedEOSAddress, address _evmAddress, IERC20 _linkedERC20, uint256 _depositFee) initializer public {
         __UUPSUpgradeable_init();
 
         linkedERC20 = _linkedERC20;
-        evmAddress = block.coinbase;
-        linkedEOSAddress = msg.sender;
+        evmAddress = _evmAddress;
+        linkedEOSAddress = _linkedEOSAddress;
         linkedEOSAccountName = _addressToName(linkedEOSAddress);
 
         lockTime = 2419200; // 28 days
@@ -1380,6 +1380,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
     }
 
     function _addressToName(address input ) internal pure returns (string memory) {
+        require(_isReservedAddress(input));
         uint64 a = uint64(uint160(input));
         bytes memory bstr = new bytes(12);
 
