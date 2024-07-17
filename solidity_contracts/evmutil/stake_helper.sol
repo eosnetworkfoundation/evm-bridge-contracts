@@ -1365,6 +1365,10 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         mapping(uint256 => PendingFunds) pendingFunds;
     }
 
+    event Deposit(address indexed caller, address indexed to, uint256 value);
+    event Withdraw(address indexed caller, address indexed from, uint256 value);
+    event Restake(address indexed caller, address indexed from, address indexed to, uint256 value);
+
     mapping(address => mapping(address => StakeInfo)) public stakeInfo;
 
     function initialize(address _linkedEOSAddress, address _evmAddress, IERC20 _linkedERC20, uint256 _depositFee) initializer public {
@@ -1473,7 +1477,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         (bool success, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, receiver_msg ));
         if(!success) { revert(); }
 
-
+        emit Deposit(msg.sender, _target, _amount);
     }
 
     function restake(address _from, address _to, uint256 _amount) external {
@@ -1494,6 +1498,8 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         bytes memory receiver_msg = abi.encodeWithSignature("restake(address,address,uint256,address)", _from, _to, _amount, msg.sender);
         (bool success, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, receiver_msg ));
         if(!success) { revert(); }
+
+        emit Restake(msg.sender, _from, _to, _amount);
     }
 
     function claim(address _target) external {
@@ -1522,6 +1528,8 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         bytes memory receiver_msg = abi.encodeWithSignature("withdraw(address,uint256,address)", _target, _amount, msg.sender);
         (bool success, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, receiver_msg ));
         if(!success) { revert(); }
+        
+        emit Withdraw(msg.sender, _target, _amount);
     }
 
     function claimPendingFunds(address _target) external { 
