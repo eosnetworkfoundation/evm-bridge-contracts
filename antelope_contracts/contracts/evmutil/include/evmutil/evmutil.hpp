@@ -157,6 +157,14 @@ class [[eosio::contract]] evmutil : public contract {
      */
     [[eosio::action]] void setlocktime(std::string proxy_address, uint64_t locktime);
     
+    /**
+     * @brief Update the implementation of target stake helper to latest.
+     * 
+     * @auth Self
+     * 
+     * @param proxy_address - The proxy address for the targeting stake helper.
+     */
+    [[eosio::action]] void upstakeimpl(std::string proxy_address);
 
     // Public Helpers
     config_t get_config() const;
