@@ -1544,8 +1544,8 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         }
     }
 
-    function pendingFunds(address _target) external view returns (uint256) {
-        StakeInfo storage stake = stakeInfo[_target][msg.sender];
+    function pendingFunds(address _target, address user) external view returns (uint256) {
+        StakeInfo storage stake = stakeInfo[_target][user];
         uint256 result = stake.unlockedFund;
         uint256 first = stake.pendingFundsFirst;
         uint256 last = stake.pendingFundsLast;
@@ -1561,6 +1561,29 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
             }
         }
 
+        return result;
+    }
+
+    function pendingFundQueue(address _target, address user) external view returns (PendingFunds [] memory) {
+        StakeInfo storage stake = stakeInfo[_target][user];
+        uint256 first = stake.pendingFundsFirst;
+        uint256 last = stake.pendingFundsLast;
+
+        while (first < last) {
+            PendingFunds storage firstEntry = stake.pendingFunds[first];
+            if (firstEntry.startingHeight + lockTime <= block.number) {
+                first += 1;
+                continue;
+            }
+            else {
+                break;
+            }
+        }
+        PendingFunds [] memory result = new PendingFunds[](last - first);
+        for (uint i = 0; i < last - first; i++) {
+          PendingFunds storage entry = stake.pendingFunds[first + i];
+          result[i] = entry;
+        }
         return result;
     }
 
