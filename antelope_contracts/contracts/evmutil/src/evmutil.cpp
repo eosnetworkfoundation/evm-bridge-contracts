@@ -452,7 +452,7 @@ void evmutil::handle_rewards(const bridge_message_v0 &msg) {
     
     // 0x42b3c021 : 21c0b342 : claim(address,address)
     // 0xc16fb607 : 07b66fc1 : vdrclaim(address,address)
-
+    // 0x3d7bb560 : 60b57b3d : creditclaim(address,address,address)
     if (app_type == 0x42b3c021) {
         check(msg.data.size() >= 4 + 32 /*to*/ + 32 /*from*/, 
             "not enough data in bridge_message_v0 of application type 0x653332e5");
@@ -481,7 +481,23 @@ void evmutil::handle_rewards(const bridge_message_v0 &msg) {
         vdrclaim_act.send(eosio::name(dest_acc));
     
     
-    } else {
+    } else if (app_type == 0x3d7bb560) /* creditclaim(address,address,address) */{
+        check(msg.data.size() >= 4 + 32 /*to*/ + 32 /*proxy*/ + 32 /*from*/, 
+            "not enough data in bridge_message_v0 of application type 0x653332e5");
+
+        uint64_t dest_acc;
+        readExSatAccount(msg.data, 4, dest_acc);
+
+        evmc::address proxy_addr;
+        readEvmAddress(msg.data, 4 + 32, proxy_addr);
+
+        evmc::address sender_addr;
+        readEvmAddress(msg.data, 4 + 32 + 32, sender_addr);
+
+        endrmng::evmclaim_action evmclaim_act(config.endrmng_account, {{receiver_account(), "active"_n}});
+        evmclaim_act.send(get_self(), make_key160(proxy_addr.bytes, kAddressLength), make_key160(sender_addr.bytes, kAddressLength), dest_acc);
+    } 
+    else {
         eosio::check(false, "unsupported bridge_message version");
     }
 }

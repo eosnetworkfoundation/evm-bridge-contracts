@@ -14,6 +14,8 @@
 
 #include <utils/xbtc_bytecode.hpp>
 #include <evmutil/stake_helper_bytecode.hpp>
+
+#include <evmutil/reward_helper_bytecode.hpp>
 #include <optional>
 
 using namespace eosio;
@@ -262,15 +264,26 @@ evmutil_tester::evmutil_tester(bool use_real_evm, eosio::chain::name evm_account
         deployer.sign(txn2);
         pushtx(txn2);
         produce_block();
+
+        push_action(evmutil_account, "setstakeimpl"_n, evmutil_account, mvo()("impl_address",fc::variant(impl_addr).as_string()));
+
+        produce_block();
+
+
+        impl_addr = silkworm::create_address(deployer.address, deployer.next_nonce); 
+
+        auto txn3 = prepare_deploy_contract_tx(solidity::rewardhelper::bytecode, sizeof(solidity::rewardhelper::bytecode), 10'000'000);
+
+        deployer.sign(txn3);
+        pushtx(txn3);
+        produce_block();
+
+        push_action(evmutil_account, "setrwdhelper"_n, evmutil_account, mvo()("impl_address",fc::variant(impl_addr).as_string()));
+
+        produce_block();
+
+
     }
-
-    push_action(evmutil_account, "dpyrwdhelper"_n, evmutil_account, mvo());
-
-    produce_block();
-
-   push_action(evmutil_account, "setstakeimpl"_n, evmutil_account, mvo()("impl_address",fc::variant(impl_addr).as_string()));
-
-    produce_block();
 
     push_action(evmutil_account, "regtoken"_n, evmutil_account, mvo()("token_address",fc::variant(xbtc_addr).as_string())("dep_fee","0.01000000 BTC")("erc20_precision",18));
 
