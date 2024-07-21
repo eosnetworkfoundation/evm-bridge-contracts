@@ -1,8 +1,9 @@
-# EOS EVM Bridge Contracts
+# Exsat EVM supporting contracts
 
-This repository contains the Solidity and Antelope contracts needed to support advanced functionality of the trustless bridge of EOS EVM.
+This repository contains the Solidity and Antelope contracts needed to support advanced functionality of the Exsat. Including trustless bridges, staking and reward claiming.
 
-The `erc20` contracts (both within `solidity_contracts` and `antelope_contracts`) enable tokens to be moved between the EOS EVM and EOS Native environments across the trustless bridge of EOS EVM. On the EOS EVM side, the tokens are managed by an ERC-20 compatible token contract that is automatically deployed to EOS EVM and managed by the Antelope `erc20` contract. On the EOS Native side, the Antelope `erc20` contract supports any tokens that follow the common interface established by the [`eosio.token` reference contract](https://github.com/AntelopeIO/reference-contracts/tree/main/contracts/eosio.token); specifically, the token contract deployed on EOS Native must satisfy the interface for the `transfer` action captured in [this header file](antelope_contracts/contracts/erc20/include/erc20/eosio.token.hpp) and its behavior should follow the expectations set in the `eosio.token` reference contract.
+Those contracts (both within `solidity_contracts` and `antelope_contracts`) enable communication and tokens moves between the EVM and Native environments. 
+
 ## Dependencies
 
 - CMake 3.16 or later
@@ -12,9 +13,9 @@ The `erc20` contracts (both within `solidity_contracts` and `antelope_contracts`
   + Used to compile the .sol files. 
   + We chose to use solcjs because it is more actively maintained than the solc available from the package manager.
     * First install node.js and npm.
-    * Then install solcjs: `npm install -g solc@0.8.21`
-  + Make sure to install version 0.8.21.
-    * Confirm with `solcjs --version`. You should get `0.8.21+commit.d9974bed.Emscripten.clang`
+    * Then install solcjs: `npm install -g solc`
+  + Make sure to install at least version 0.8.21.
+    * Confirm with `solcjs --version`.
 - Install `jq` used to compile solidity contracts
   + `apt-get install jq`
 - Install `xxd` used to compile solidity contracts
