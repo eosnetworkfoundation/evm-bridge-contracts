@@ -1371,6 +1371,8 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
 
     mapping(address => mapping(address => StakeInfo)) public stakeInfo;
 
+    mapping(address => mapping(uint256 => address)) public userPendingTracker;
+
     function initialize(address _linkedEOSAddress, address _evmAddress, IERC20 _linkedERC20, uint256 _depositFee) initializer public {
         __UUPSUpgradeable_init();
 
@@ -1452,6 +1454,50 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         }
     }
 
+    function markUserPendingFund(address _target, address _user) internal {
+        // Note: In exsat, storage is usually more expensive then CPU so we simply loop here.
+        // The user should have only limited unclaimed fund in different validators so it should be fine.
+        // We can consider improve this logic if it turns out to be too slow.
+        uint i = 0;
+        while (true)  {
+            if (userPendingTracker[_user][i] == _target) {
+                break;
+            }
+            if (userPendingTracker[_user][i] == address(0)) {
+                userPendingTracker[_user][i] = _target;
+                break;
+            }
+            i++;
+        }
+    }
+
+    function unmarkUserPendingFund(address _target, address _user) internal {
+        // Note: In exsat, storage is usually more expensive then CPU so we simply loop here.
+        // The user should have only limited unclaimed fund in different validators so it should be fine.
+        // We can consider improve this logic if it turns out to be too slow.
+        uint i = 0;
+        uint target = 0;
+        bool found = false;
+        while (true)  {
+            if (userPendingTracker[_user][i] == address(0)) {
+                if (!found) {
+                    break;
+                } else {
+                    assert(i > 0);
+                    // It's fine for target = i-1 case.
+                    userPendingTracker[_user][target] = userPendingTracker[_user][i-1];
+                    userPendingTracker[_user][i-1] = address(0);
+                }
+                break;
+            }
+            if (userPendingTracker[_user][i] == _target) {
+                found = true;
+                target = i;
+            }
+            i++;
+        }
+    }
+
     function setFee(uint256 _depositFee) public {
         require(msg.sender == linkedEOSAddress, "Bridge: only linked EOS address can set fee");
         depositFee = _depositFee;
@@ -1520,6 +1566,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
             stake.amount = stake.amount - _amount;
 
             pushPendingFunds(_target, address(msg.sender), _amount);
+            markUserPendingFund(_target, address(msg.sender));
         }
 
         // The action is aynchronously viewed from EVM and looks UNSAFE.
@@ -1542,10 +1589,13 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
             stake.unlockedFund = 0;
             linkedERC20.safeTransfer(address(msg.sender), funds);
         }
+        if (stake.unlockedFund == 0 && stake.pendingFundsFirst == stake.pendingFundsLast) {
+            unmarkUserPendingFund(_target, address(msg.sender));
+        }
     }
 
-    function pendingFunds(address _target, address user) external view returns (uint256) {
-        StakeInfo storage stake = stakeInfo[_target][user];
+    function pendingFunds(address _target, address _user) external view returns (uint256) {
+        StakeInfo storage stake = stakeInfo[_target][_user];
         uint256 result = stake.unlockedFund;
         uint256 first = stake.pendingFundsFirst;
         uint256 last = stake.pendingFundsLast;
@@ -1564,8 +1614,8 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         return result;
     }
 
-    function pendingFundQueue(address _target, address user) external view returns (PendingFunds [] memory) {
-        StakeInfo storage stake = stakeInfo[_target][user];
+    function pendingFundQueue(address _target, address _user) external view returns (PendingFunds [] memory) {
+        StakeInfo storage stake = stakeInfo[_target][_user];
         uint256 first = stake.pendingFundsFirst;
         uint256 last = stake.pendingFundsLast;
 
@@ -1583,6 +1633,89 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         for (uint i = 0; i < last - first; i++) {
           PendingFunds storage entry = stake.pendingFunds[first + i];
           result[i] = entry;
+        }
+        return result;
+    }
+
+    function claimPendingFunds() external { 
+        address _user = address(msg.sender);
+        uint i = 0;
+        while (true)  {
+            if (userPendingTracker[_user][i] == address(0)) {
+                break;
+            }
+            
+            address _target = userPendingTracker[_user][i];
+
+            refreshPendingFunds(_target, address(msg.sender));
+
+            StakeInfo storage stake = stakeInfo[_target][msg.sender];
+
+            if (stake.unlockedFund > 0) {
+                uint256 funds = stake.unlockedFund;
+                stake.unlockedFund = 0;
+                linkedERC20.safeTransfer(address(msg.sender), funds);
+            }
+            if (stake.unlockedFund == 0 && stake.pendingFundsFirst == stake.pendingFundsLast) {      
+                uint j = i + 1;
+                while (true)  {
+                    if (userPendingTracker[_user][j] == address(0)) {
+                        userPendingTracker[_user][i] = userPendingTracker[_user][j - 1];
+                        userPendingTracker[_user][j - 1] = address(0);
+                        break;
+                    }
+                    j++;
+                }
+                // process same row next round
+            }
+            else {
+                i++;
+            }
+        }
+    }
+
+    function pendingFunds(address _user) external view returns (uint256) {
+        uint256 result = 0;
+
+        uint i = 0;
+        while (true)  {
+            if (userPendingTracker[_user][i] == address(0)) {
+                break;
+            }
+            i++;
+            address _target = userPendingTracker[_user][i];
+
+            StakeInfo storage stake = stakeInfo[_target][_user];
+            result += stake.unlockedFund;
+            uint256 first = stake.pendingFundsFirst;
+            uint256 last = stake.pendingFundsLast;
+
+            while (first < last) {
+                PendingFunds storage firstEntry = stake.pendingFunds[first];
+                if (firstEntry.startingHeight + lockTime <= block.number) {
+                    result += firstEntry.amount;
+                    first += 1;
+                }
+                else {
+                    break;
+                }
+            }
+        }
+
+        return result;
+    }
+
+    function listValidatorsWithPendingFunds(address _user) external view returns (address [] memory) {
+        uint count = 0;
+        while (true)  {
+            if (userPendingTracker[_user][count] == address(0)) {
+                break;
+            }
+            count++;
+        }
+        address [] memory result = new address[](count);
+        for (uint i = 0; i < count; i++) {
+          result[i] = userPendingTracker[_user][i];
         }
         return result;
     }
