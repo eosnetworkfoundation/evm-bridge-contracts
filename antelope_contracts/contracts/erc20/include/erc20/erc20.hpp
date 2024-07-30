@@ -60,6 +60,7 @@ class [[eosio::contract]] erc20 : public contract {
     [[eosio::action]] void init(eosio::name evm_account, eosio::symbol gas_token_symbol, uint64_t gaslimit, uint64_t init_gaslimit);
 
     [[eosio::action]] void setgaslimit(std::optional<uint64_t> gaslimit, std::optional<uint64_t> init_gaslimit);
+    [[eosio::action]] void callupgrade(std::string proxy_address);
     
     struct [[eosio::table("implcontract")]] impl_contract_t {
         uint64_t id = 0;

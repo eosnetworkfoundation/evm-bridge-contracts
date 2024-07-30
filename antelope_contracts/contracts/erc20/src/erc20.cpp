@@ -84,7 +84,7 @@ void erc20::upgrade() {
     evmc::address impl_addr = silkworm::create_address(reserved_addr, next_nonce); 
 
     contract_table.emplace(_self, [&](auto &v) {
-        v.id = id;
+        v.id = contract_table.available_primary_key();
         v.address.resize(kAddressLength);
         memcpy(&(v.address[0]), impl_addr.bytes, kAddressLength);
     });
@@ -100,7 +100,7 @@ void erc20::upgradeto(std::string impl_address) {
     impl_contract_table_t contract_table(_self, _self.value);
 
     contract_table.emplace(_self, [&](auto &v) {
-        v.id = id;
+        v.id = contract_table.available_primary_key();
         v.address.resize(kAddressLength);
         memcpy(&(v.address[0]), address_bytes->data(), kAddressLength);
     });
@@ -475,6 +475,53 @@ void erc20::setgaslimit(std::optional<uint64_t> gaslimit, std::optional<uint64_t
 
 inline eosio::name erc20::receiver_account()const {
     return get_self();
+}
+
+void erc20::callupgrade(std::string proxy_address) {
+    require_auth(get_self());
+
+    config_t config = get_config();
+
+    auto address_bytes = from_hex(proxy_address);
+    eosio::check(!!address_bytes, "token address must be valid 0x EVM address");
+    eosio::check(address_bytes->size() == kAddressLength, "invalid length of token address");
+
+    checksum256 addr_key = make_key(*address_bytes);
+    token_table_t token_table(_self, _self.value);
+    auto index = token_table.get_index<"by.address"_n>();
+    auto token_table_iter = index.find(addr_key);
+
+    check(token_table_iter != index.end() && token_table_iter->address == address_bytes, "ERC-20 token not registerred");
+    
+    impl_contract_table_t contract_table(_self, _self.value);
+    eosio::check(contract_table.begin() != contract_table.end(), "no implementaion contract available");
+    auto contract_itr = contract_table.end();
+    --contract_itr;
+
+
+    auto pack_uint32 = [&](bytes &ds, uint32_t val) {
+        uint8_t val_[32] = {};
+        val_[28] = (uint8_t)(val >> 24);
+        val_[29] = (uint8_t)(val >> 16);
+        val_[30] = (uint8_t)(val >> 8);
+        val_[31] = (uint8_t)val;
+        ds.insert(ds.end(), val_, val_ + sizeof(val_));
+    };
+
+    bytes call_data;
+    // sha(upgradeTo(address)) == 3659cfe6
+    uint8_t func_[4] = {0x36,0x59,0xcf,0xe6};
+    call_data.insert(call_data.end(), func_, func_ + sizeof(func_));
+    
+    
+    call_data.insert(call_data.end(), 32 - kAddressLength, 0);  // padding for address offset 0
+    call_data.insert(call_data.end(), contract_itr->address.begin(), contract_itr->address.end()); 
+
+    bytes value_zero; 
+    value_zero.resize(32, 0);
+
+    evm_runtime::call_action call_act(config.evm_account, {{receiver_account(), "active"_n}});
+    call_act.send(receiver_account(), token_table_iter->address, value_zero, call_data, config.evm_gaslimit);
 }
 
 }  // namespace erc20

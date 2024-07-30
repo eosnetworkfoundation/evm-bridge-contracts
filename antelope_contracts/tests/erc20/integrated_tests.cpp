@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "erc20_tester.hpp"
+#include <erc20/bytecode.hpp>
 
 using namespace eosio;
 using namespace eosio::chain;
@@ -270,6 +271,89 @@ try {
     bal = get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount();
 
     BOOST_REQUIRE(99990010 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
+}
+FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(it_upgrade, it_tester)
+try {
+
+    
+
+    evm_eoa evm1;
+    auto addr_alice = silkworm::make_reserved_address("alice"_n.to_uint64_t());
+
+    // Give evm1 some EOS
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(1000000, eos_token_symbol), evm1.address_0x().c_str());
+    produce_block();
+
+
+    // USDT balance should be zero
+    auto bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE(bal == 0);
+
+    produce_block();
+
+    transfer_token(token_account, "alice"_n, erc20_account, make_asset(10000, token_symbol), evm1.address_0x().c_str());
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE(bal == 990000);
+    BOOST_REQUIRE(99990000 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
+    auto tokenInfo = getRegistedTokenInfo();
+    BOOST_REQUIRE(tokenInfo.balance == make_asset(9900, token_symbol));
+    BOOST_REQUIRE(tokenInfo.fee_balance == make_asset(100, token_symbol));
+
+    produce_block();
+
+    auto fee = egressFee();
+    // received = 1000/1e6*1e4 = 10
+    bridgeTransferERC20(evm1, addr_alice, 1000, "aaa", fee);
+    produce_block();
+
+    bal = balanceOf(evm1.address_0x().c_str());
+
+    BOOST_REQUIRE(bal == 989000);
+    bal = get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount();
+
+    BOOST_REQUIRE(99990010 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount());
+
+    // upgrade 
+
+    evm_eoa deployer;
+    evmc::address impl_addr = silkworm::create_address(deployer.address, deployer.next_nonce); 
+
+    transfer_token(eos_token_account, faucet_account_name, evmin_account, make_asset(1000000, eos_token_symbol), deployer.address_0x().c_str());
+
+    auto txn = prepare_deploy_contract_tx(solidity::erc20::bytecode, sizeof(solidity::erc20::bytecode), 10'000'000);
+
+    deployer.sign(txn);
+    pushtx(txn);
+    produce_block();
+
+    push_action(erc20_account, "upgradeto"_n, erc20_account, mvo()("impl_address",fc::variant(impl_addr).as_string()));
+
+    produce_block();
+
+    push_action(erc20_account, "callupgrade"_n, erc20_account, mvo()("proxy_address",evm_address.substr(2)));
+
+    produce_block();
+
+    // Perform some basic tests again
+
+    transfer_token(token_account, "alice"_n, erc20_account, make_asset(10000, token_symbol), evm1.address_0x().c_str());
+
+    bal = balanceOf(evm1.address_0x().c_str());
+
+    BOOST_REQUIRE(bal == 989000 + 990000);
+
+    fee = egressFee();
+    // received = 1000/1e6*1e4 = 10
+    bridgeTransferERC20(evm1, addr_alice, 1000, "aaa", fee);
+    produce_block();
+
+    bal = balanceOf(evm1.address_0x().c_str());
+
+    BOOST_REQUIRE(bal == 989000 * 2);
+
 }
 FC_LOG_AND_RETHROW()
 
