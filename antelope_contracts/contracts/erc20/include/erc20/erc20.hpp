@@ -60,7 +60,8 @@ class [[eosio::contract]] erc20 : public contract {
     [[eosio::action]] void init(eosio::name evm_account, eosio::symbol gas_token_symbol, uint64_t gaslimit, uint64_t init_gaslimit);
 
     [[eosio::action]] void setgaslimit(std::optional<uint64_t> gaslimit, std::optional<uint64_t> init_gaslimit);
-    [[eosio::action]] void callupgrade(std::string proxy_address);
+    [[eosio::action]] void callupgaddr(std::string proxy_address);
+    [[eosio::action]] void callupgsym(eosio::name token_contract, eosio::symbol token_symbol);
     
     struct [[eosio::table("implcontract")]] impl_contract_t {
         uint64_t id = 0;
@@ -137,6 +138,7 @@ class [[eosio::contract]] erc20 : public contract {
 
     uint64_t get_next_nonce();
     void handle_erc20_transfer(const token_t &token, eosio::asset quantity, const std::string &memo);
+    void handle_call_upgrade(const bytes& proxy_address);
 
 private:
     eosio::name receiver_account()const;

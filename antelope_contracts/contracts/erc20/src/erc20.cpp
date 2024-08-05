@@ -477,10 +477,8 @@ inline eosio::name erc20::receiver_account()const {
     return get_self();
 }
 
-void erc20::callupgrade(std::string proxy_address) {
+void erc20::callupgaddr(std::string proxy_address){
     require_auth(get_self());
-
-    config_t config = get_config();
 
     auto address_bytes = from_hex(proxy_address);
     eosio::check(!!address_bytes, "token address must be valid 0x EVM address");
@@ -492,13 +490,28 @@ void erc20::callupgrade(std::string proxy_address) {
     auto token_table_iter = index.find(addr_key);
 
     check(token_table_iter != index.end() && token_table_iter->address == address_bytes, "ERC-20 token not registerred");
+
+    handle_call_upgrade(token_table_iter->address);
+}
+
+void erc20::callupgsym(eosio::name token_contract, eosio::symbol token_symbol){
+    require_auth(get_self());
+
+    token_table_t token_table(_self, _self.value);
+    auto index_symbol = token_table.get_index<"by.symbol"_n>();
+    auto token_table_iter = index_symbol.find(token_symbol_key(token_contract, token_symbol.code()));
+    eosio::check(token_table_iter != index_symbol.end(), "token not registered");
     
+    handle_call_upgrade(token_table_iter->address);
+}
+
+void erc20::handle_call_upgrade(const bytes& proxy_address) {
+    config_t config = get_config();
     impl_contract_table_t contract_table(_self, _self.value);
     eosio::check(contract_table.begin() != contract_table.end(), "no implementaion contract available");
     auto contract_itr = contract_table.end();
     --contract_itr;
-
-
+ 
     auto pack_uint32 = [&](bytes &ds, uint32_t val) {
         uint8_t val_[32] = {};
         val_[28] = (uint8_t)(val >> 24);
@@ -521,7 +534,7 @@ void erc20::callupgrade(std::string proxy_address) {
     value_zero.resize(32, 0);
 
     evm_runtime::call_action call_act(config.evm_account, {{receiver_account(), "active"_n}});
-    call_act.send(receiver_account(), token_table_iter->address, value_zero, call_data, config.evm_gaslimit);
+    call_act.send(receiver_account(), proxy_address, value_zero, call_data, config.evm_gaslimit);
 }
 
 }  // namespace erc20
