@@ -477,24 +477,7 @@ inline eosio::name erc20::receiver_account()const {
     return get_self();
 }
 
-void erc20::callupgaddr(std::string proxy_address){
-    require_auth(get_self());
-
-    auto address_bytes = from_hex(proxy_address);
-    eosio::check(!!address_bytes, "token address must be valid 0x EVM address");
-    eosio::check(address_bytes->size() == kAddressLength, "invalid length of token address");
-
-    checksum256 addr_key = make_key(*address_bytes);
-    token_table_t token_table(_self, _self.value);
-    auto index = token_table.get_index<"by.address"_n>();
-    auto token_table_iter = index.find(addr_key);
-
-    check(token_table_iter != index.end() && token_table_iter->address == address_bytes, "ERC-20 token not registerred");
-
-    handle_call_upgrade(token_table_iter->address);
-}
-
-void erc20::callupgsym(eosio::name token_contract, eosio::symbol token_symbol){
+void erc20::callupgrade(eosio::name token_contract, eosio::symbol token_symbol){
     require_auth(get_self());
 
     token_table_t token_table(_self, _self.value);
