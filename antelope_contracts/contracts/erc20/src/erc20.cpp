@@ -134,7 +134,7 @@ void erc20::upgradeto(std::string impl_address) {
     --contract_itr;
 
     auto reserved_addr = silkworm::make_reserved_address(receiver_account().value);
-
+    auto evm_reserved_addr = silkworm::make_reserved_address(config.evm_account.value);
     bytes call_data;
     initialize_data(call_data, solidity::proxy::bytecode);
 
@@ -143,8 +143,8 @@ void erc20::upgradeto(std::string impl_address) {
     call_data.insert(call_data.end(), contract_itr->address.begin(), contract_itr->address.end());
 
     bytes constructor_data;
-    // sha(function initialize(uint8 _precision,uint256 _egressFee,string memory _name,string memory _symbol,string memory _eos_token_contract)) == 0xd66d4ac3
-    uint8_t func_[4] = {0xd6,0x6d,0x4a,0xc3};
+    // initialize(address,address,uint8,uint256,string,string,string) == 0x1fa01e36
+    uint8_t func_[4] = {0x1f,0xa0,0x1e,0x36};
     constructor_data.insert(constructor_data.end(), func_, func_ + sizeof(func_));
 
     auto pack_uint256 = [&](bytes &ds, const intx::uint256 &val) {
@@ -169,14 +169,18 @@ void erc20::upgradeto(std::string impl_address) {
         }
     };
 
-    pack_uint32(constructor_data, (uint8_t)erc20_precision); // offset 0
-    pack_uint256(constructor_data, egress_fee_evm);          // offset 32
-    pack_uint32(constructor_data, 160);                      // offset 64
-    pack_uint32(constructor_data, 224);                      // offset 96
-    pack_uint32(constructor_data, 288);                      // offset 128
-    pack_string(constructor_data, evm_token_name);           // offset 160
-    pack_string(constructor_data, evm_token_symbol);         // offset 224
-    pack_string(constructor_data, token_contract.to_string()); // offset 288
+    constructor_data.insert(constructor_data.end(), 32 - kAddressLength, 0);  // padding for address, offset 0
+    constructor_data.insert(constructor_data.end(), reserved_addr.bytes, reserved_addr.bytes + kAddressLength); 
+    constructor_data.insert(constructor_data.end(), 32 - kAddressLength, 0);  // padding for address, offset 32
+    constructor_data.insert(constructor_data.end(), evm_reserved_addr.bytes, evm_reserved_addr.bytes + kAddressLength); 
+    pack_uint32(constructor_data, (uint8_t)erc20_precision); // offset 64
+    pack_uint256(constructor_data, egress_fee_evm);          // offset 96
+    pack_uint32(constructor_data, 224);                      // offset 128
+    pack_uint32(constructor_data, 288);                      // offset 160
+    pack_uint32(constructor_data, 352);                      // offset 196
+    pack_string(constructor_data, evm_token_name);           // offset 224
+    pack_string(constructor_data, evm_token_symbol);         // offset 288
+    pack_string(constructor_data, token_contract.to_string()); // offset 352
 
     pack_uint32(call_data, 64);                  // offset 32
     pack_string(call_data, constructor_data);    // offset 64
