@@ -170,13 +170,21 @@ class erc20_tester : public eosio::testing::base_tester {
 
     using base_tester::produce_block;
 
-    signed_block_ptr produce_block( fc::microseconds skip_time = fc::milliseconds(config::block_interval_ms) )override {
-        return _produce_block(skip_time, false);
+    signed_block_ptr produce_block( fc::microseconds skip_time = fc::milliseconds(config::block_interval_ms), bool no_throw = false )override {
+        auto produce_block_result = _produce_block(skip_time, false, no_throw);
+        auto sb = produce_block_result.block;
+        return sb;
     }
 
     signed_block_ptr produce_empty_block( fc::microseconds skip_time = fc::milliseconds(config::block_interval_ms) )override {
         unapplied_transactions.add_aborted( control->abort_block() );
-        return _produce_block(skip_time, true);
+        auto sb = _produce_block(skip_time, true);
+        return sb;
+    }
+
+    testing::produce_block_result_t produce_block_ex( fc::microseconds skip_time = default_skip_time, bool no_throw = false ) override {
+        auto produce_block_result = _produce_block(skip_time, false, no_throw);
+        return produce_block_result;
     }
 
     signed_block_ptr finish_block()override {
