@@ -1,6 +1,6 @@
 {
     "antelope-spring-dev":{
-       "target":"1",
+       "target":"main",
        "prerelease":false
     },
     "cdt":{
