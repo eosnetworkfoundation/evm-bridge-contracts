@@ -1,6 +1,6 @@
 {
     "antelope-spring-dev":{
-       "target":"main",
+       "target":"1",
        "prerelease":false
     },
     "cdt":{
@@ -8,7 +8,7 @@
        "prerelease":false
     },
     "eos-evm-contract":{
-      "target":"release/1.0",
+      "target":"main",
       "prerelease":false
     }
  }
