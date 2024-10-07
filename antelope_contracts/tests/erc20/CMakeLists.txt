@@ -37,4 +37,4 @@ add_eosio_test_executable( unit_test
 )
 add_dependencies(unit_test contracts)
 # TODO: add back eos-vm-oc once change to disable EOS VM OC subjective limits during unit test are added
-add_test(NAME erc20_tests COMMAND unit_test --report_level=detailed --color_output )
+add_test(NAME erc20_tests COMMAND unit_test --report_level=detailed --color_output --verbose )
