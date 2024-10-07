@@ -114,7 +114,7 @@ evm_eoa::~evm_eoa() { secp256k1_context_destroy(ctx); }
 
 
 
-erc20_tester::erc20_tester(bool use_real_evm, eosio::chain::name evm_account_, std::string native_symbol_str) : evm_account(evm_account_), native_symbol(symbol::from_string(native_symbol_str)) {
+erc20_tester::erc20_tester(bool use_real_evm, eosio::chain::name evm_account_, std::string native_symbol_str, eosio::chain::name eos_token_account_) : evm_account(evm_account_), native_symbol(symbol::from_string(native_symbol_str)), eos_token_account(eos_token_account_) {
     auto def_conf = default_config(tempdir, 4096);
 
     cfg = def_conf.first;
@@ -193,8 +193,9 @@ erc20_tester::erc20_tester(bool use_real_evm, eosio::chain::name evm_account_, s
 
         open(erc20_account);
 
-        transfer_token(eos_token_account, faucet_account_name, evm_account, make_asset(10000'0000), "eosio.erc2o");
-        bridgereg(erc20_account, erc20_account, asset(100, symbol::from_string("4,EOS")));
+        transfer_token(eos_token_account, faucet_account_name, evm_account, make_asset(10'0000'0000), "eosio.erc2o"); // 100K EOS or 10 BTC
+
+        bridgereg(erc20_account, erc20_account, make_asset(100));
     } else {
         set_code(evm_account, testing::contracts::evm_stub_wasm());
         set_abi(evm_account, testing::contracts::evm_stub_abi().data());
@@ -214,20 +215,24 @@ erc20_tester::erc20_tester(bool use_real_evm, eosio::chain::name evm_account_, s
     evmc::address impl_addr = silkworm::create_address(deployer.address, deployer.next_nonce); 
 
     if (use_real_evm) {
-        transfer_token(eos_token_account, faucet_account_name, evmin_account, make_asset(1000000, eos_token_symbol), deployer.address_0x().c_str());
+        try {
 
-        auto txn = prepare_deploy_contract_tx(solidity::erc20::bytecode, sizeof(solidity::erc20::bytecode), 10'000'000);
+            transfer_token(eos_token_account, faucet_account_name, evm_account, make_asset(10'0000'0000), deployer.address_0x().c_str());
 
-        deployer.sign(txn);
-        pushtx(txn);
-        produce_block();
+            auto txn = prepare_deploy_contract_tx(solidity::erc20::bytecode, sizeof(solidity::erc20::bytecode), 10'000'000);
+
+            deployer.sign(txn);
+            pushtx(txn);
+            produce_block();
+
+        } FC_CAPTURE_AND_RETHROW()
     }
 
     push_action(erc20_account, "upgradeto"_n, erc20_account, mvo()("impl_address",fc::variant(impl_addr).as_string()));
 
     produce_block();
 
-    push_action(erc20_account, "regtoken"_n, erc20_account, mvo()("eos_contract_name",token_account.to_string())("evm_token_name","EVM USDT V1")("evm_token_symbol","WUSDT")("ingress_fee","0.0100 USDT")("egress_fee","0.0100 EOS")("erc20_precision",6));
+    push_action(erc20_account, "regtoken"_n, erc20_account, mvo()("eos_contract_name",token_account.to_string())("evm_token_name","EVM USDT V1")("evm_token_symbol","WUSDT")("ingress_fee","0.0100 USDT")("egress_fee", make_asset(100))("erc20_precision",6));
 
     produce_block();
 
@@ -251,10 +256,10 @@ void erc20_tester::init_evm(const uint64_t chainid,
     if (ingress_bridge_fee.has_value()) {
         fee_params("ingress_bridge_fee", *ingress_bridge_fee);
     } else {
-        fee_params("ingress_bridge_fee", "0.0000 EOS");
+        fee_params("ingress_bridge_fee", make_asset(0));
     }
 
-    push_action(evm_account, "init"_n, evm_account, mvo()("chainid", chainid)("fee_params", fee_params));
+    push_action(evm_account, "init"_n, evm_account, mvo()("chainid", chainid)("fee_params", fee_params)("token_contract", eos_token_account));
 
     if (also_prepare_self_balance) {
         prepare_self_balance();
@@ -264,10 +269,14 @@ void erc20_tester::init_evm(const uint64_t chainid,
 void erc20_tester::prepare_self_balance(uint64_t fund_amount) {
     // Ensure internal balance for evm_account_name has at least 1 EOS to cover max bridge gas fee with even high gas
     // price.
-    transfer_token(eos_token_account, faucet_account_name, evm_account, make_asset(1'0000), evm_account.to_string());
+    transfer_token(eos_token_account, faucet_account_name, evm_account, make_asset(1000'0000), evm_account.to_string()); // 100K EOS or 0.1 BTC
 }
 
 transaction_trace_ptr erc20_tester::bridgereg(eosio::chain::name receiver, eosio::chain::name handler, eosio::chain::asset min_fee, vector<account_name> extra_signers) {
+
+    if (extra_signers.size() == 1 && extra_signers[0] == ""_n) {
+        extra_signers[0] = evm_account;
+    }
     extra_signers.push_back(receiver);
     if (receiver != handler)
         extra_signers.push_back(handler);

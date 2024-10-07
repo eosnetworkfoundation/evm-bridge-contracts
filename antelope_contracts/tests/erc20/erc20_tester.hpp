@@ -129,11 +129,11 @@ class erc20_tester : public eosio::testing::base_tester {
    static constexpr eosio::chain::name faucet_account_name = "eosio.faucet"_n;
    static constexpr eosio::chain::name erc20_account = "eosio.erc2o"_n;
    static constexpr eosio::chain::name eos_system_account = "eosio"_n;
-   static constexpr eosio::chain::name eos_token_account = "eosio.token"_n;
+   const eosio::chain::name eos_token_account;
 
-    const eosio::chain::name evm_account = "eosio.evm"_n;
+    const eosio::chain::name evm_account;
     const eosio::chain::symbol native_symbol;
-    explicit erc20_tester(bool use_real_evm = false, eosio::chain::name evm_account_ = "eosio.evm"_n, std::string native_symbol_str = "4,EOS");
+    explicit erc20_tester(bool use_real_evm = false, eosio::chain::name evm_account_ = "eosio.evm"_n, std::string native_symbol_str = "4,EOS", eosio::chain::name eos_token_account_ = "eosio.token"_n);
 
     unsigned int exec_count = 0; // ensure uniqueness in exec
 
@@ -141,7 +141,7 @@ class erc20_tester : public eosio::testing::base_tester {
     eosio::chain::asset make_asset(int64_t amount, const eosio::chain::symbol& target_symbol) const { return eosio::chain::asset(amount, target_symbol); }
     eosio::chain::transaction_trace_ptr transfer_token(eosio::chain::name token_account_name, eosio::chain::name from, eosio::chain::name to, eosio::chain::asset quantity, std::string memo = "");
     void prepare_self_balance(uint64_t fund_amount = 100'0000);
-    transaction_trace_ptr bridgereg(eosio::chain::name receiver, eosio::chain::name handler, eosio::chain::asset min_fee, vector<account_name> extra_signers={"eosio.evm"_n});
+    transaction_trace_ptr bridgereg(eosio::chain::name receiver, eosio::chain::name handler, eosio::chain::asset min_fee, vector<account_name> extra_signers={ ""_n /* default value replaced with evm_account*/});
     void open(name owner);
     transaction_trace_ptr exec(const exec_input& input, const std::optional<exec_callback>& callback);
     eosio::chain::action get_action( account_name code, action_name acttype, std::vector<permission_level> auths,
