@@ -20,6 +20,7 @@ add_eosio_test_executable( unit_test
     ${CMAKE_CURRENT_SOURCE_DIR}/erc20_tester.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/transfer_tests.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/integrated_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/different_gas_token_tests.cpp
     ${EXTERNAL_DIR}/silkworm/silkworm/core/rlp/encode.cpp
     ${EXTERNAL_DIR}/silkworm/silkworm/core/rlp/decode.cpp
     ${EXTERNAL_DIR}/silkworm/silkworm/core/types/transaction.cpp
