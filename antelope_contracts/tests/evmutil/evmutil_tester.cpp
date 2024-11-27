@@ -127,7 +127,7 @@ evmutil_tester::evmutil_tester(bool use_real_evm, eosio::chain::name evm_account
     auto def_conf = default_config(tempdir, 4096);
 
     cfg = def_conf.first;
-    init(def_conf.first, def_conf.second);
+    init(def_conf.first, def_conf.second, testing::call_startup_t::yes);
 
     const auto& pfm = control->get_protocol_feature_manager();
 
