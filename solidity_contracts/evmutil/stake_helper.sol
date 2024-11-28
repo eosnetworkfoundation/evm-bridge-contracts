@@ -1336,10 +1336,7 @@ abstract contract UUPSUpgradeable is Initializable, IERC1822Proxiable {
 
 pragma solidity ^0.8.18;
 
-
-
-
-contract StakeHelper is Initializable, UUPSUpgradeable { 
+contract StakeHelper is Initializable, UUPSUpgradeable {
 
     using SafeERC20 for IERC20;
 
@@ -1380,6 +1377,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
     }
 
     mapping(address => mapping(address => TransferAuthorization)) public transferAuthorizations;
+    mapping(address => address[]) private transferAuthorizationsOperators;
 
     event AuthorizeTransfer(address, address, uint256);
     event PerformTransfer(address, address, address, uint256);
@@ -1521,7 +1519,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         lockTime = _lockTime;
     }
 
-    function deposit(address _target, uint256 _amount) external payable {
+    function deposit(address _target, uint256 _amount) public payable {
         StakeInfo storage stake = stakeInfo[_target][msg.sender];
         require(msg.value == depositFee, "Deposit: must pay exact amount of deposit fee");
         if (_amount > 0) {
@@ -1588,7 +1586,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         bytes memory receiver_msg = abi.encodeWithSignature("withdraw(address,uint256,address)", _target, _amount, msg.sender);
         (bool success, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, receiver_msg ));
         if(!success) { revert(); }
-        
+
         emit Withdraw(msg.sender, _target, _amount);
     }
 
@@ -1629,8 +1627,8 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         }
         PendingFunds [] memory result = new PendingFunds[](last - first);
         for (uint i = 0; i < last - first; i++) {
-          PendingFunds storage entry = stake.pendingFunds[first + i];
-          result[i] = entry;
+            PendingFunds storage entry = stake.pendingFunds[first + i];
+            result[i] = entry;
         }
         return result;
     }
@@ -1645,7 +1643,10 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         stake.unlockedFund = 0;
 
         if (receiveAsBTC) {
-            linkedERC20.withdraw(funds);
+            (bool success, bytes memory data) = address(linkedERC20).call(
+                abi.encodeWithSignature("withdraw(uint256)", funds)
+            );
+            require(success, "Withdraw call failed");
             (bool sent, ) = payable(msg.sender).call{value: funds}("");
             require(sent, "Transfer failed");
         } else {
@@ -1696,7 +1697,10 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         require(totalFunds > 0, "Claim: no funds available");
 
         if (receiveAsBTC) {
-            linkedERC20.withdraw(totalFunds);
+            (bool success, bytes memory data) = address(linkedERC20).call(
+                abi.encodeWithSignature("withdraw(uint256)", totalFunds)
+            );
+            require(success, "Withdraw call failed");
             (bool sent, ) = payable(_user).call{value: totalFunds}("");
             require(sent, "Transfer failed");
         } else {
@@ -1746,7 +1750,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         }
         address [] memory result = new address[](count);
         for (uint i = 0; i < count; i++) {
-          result[i] = userPendingTracker[_user][i];
+            result[i] = userPendingTracker[_user][i];
         }
         return result;
     }
@@ -1765,13 +1769,16 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         uint256 initialBalance = linkedERC20.balanceOf(address(this));
 
         // Call the deposit function
-        linkedERC20.deposit{value: amount}();
+        (bool success, bytes memory data) = address(linkedERC20).call{value: amount}(
+            abi.encodeWithSignature("deposit()")
+        );
+        require(success, "Deposit call failed");
 
         // Record the new ERC20 balance
         uint256 newBalance = linkedERC20.balanceOf(address(this));
 
-        // Ensure the balance increase matches the deposited amount
-        require(newBalance == initialBalance + amount, "Conversion failed");
+        // Ensure the balance increase more than the amount sent
+        require(newBalance >= initialBalance + amount, "Conversion failed");
 
         // Perform the deposit operation
         deposit(_target, amount);
@@ -1838,6 +1845,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         require(_amount <= stake.amount, "Approve: insufficient stake");
 
         transferAuthorizations[msg.sender][_operator] = TransferAuthorization(_amount, _fromValidator,true);
+        transferAuthorizationsOperators[msg.sender].push(_operator);
 
         emit AuthorizeTransfer(msg.sender, _fromValidator, _amount);
     }
@@ -1860,8 +1868,16 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         emit PerformTransfer(_user, _fromValidator, _toValidator, _amount);
     }
 
+
     function revokeAuthorize() external {
-        delete transferAuthorizations[msg.sender];
+        address[] storage operators = transferAuthorizationsOperators[msg.sender];
+
+        for (uint256 i = 0; i < operators.length; i++) {
+            address operator = operators[i];
+            delete transferAuthorizations[msg.sender][operator];
+        }
+
+        delete transferAuthorizationsOperators[msg.sender];
     }
     function revokeAuthorize(address _operator) external {
         delete transferAuthorizations[msg.sender][_operator];
