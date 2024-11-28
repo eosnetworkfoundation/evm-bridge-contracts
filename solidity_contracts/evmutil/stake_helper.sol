@@ -1632,6 +1632,22 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         }
         return result;
     }
+
+    function claimPendingFunds(address _target) external {
+        refreshPendingFunds(_target, address(msg.sender));
+
+        StakeInfo storage stake = stakeInfo[_target][msg.sender];
+
+        if (stake.unlockedFund > 0) {
+            uint256 funds = stake.unlockedFund;
+            stake.unlockedFund = 0;
+            linkedERC20.safeTransfer(address(msg.sender), funds);
+        }
+        if (stake.unlockedFund == 0 && stake.pendingFundsFirst == stake.pendingFundsLast) {
+            unmarkUserPendingFund(_target, address(msg.sender));
+        }
+    }
+
     function claimPendingFunds(address _target, bool receiveAsBTC) external {
         refreshPendingFunds(_target, msg.sender);
 
@@ -1657,6 +1673,43 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
             unmarkUserPendingFund(_target, msg.sender);
         }
         emit FundsClaimed(msg.sender, _target, funds, receiveAsBTC);
+    }
+
+    function claimPendingFunds() external {
+        address _user = address(msg.sender);
+        uint i = 0;
+        while (true)  {
+            if (userPendingTracker[_user][i] == address(0)) {
+                break;
+            }
+
+            address _target = userPendingTracker[_user][i];
+
+            refreshPendingFunds(_target, address(msg.sender));
+
+            StakeInfo storage stake = stakeInfo[_target][msg.sender];
+
+            if (stake.unlockedFund > 0) {
+                uint256 funds = stake.unlockedFund;
+                stake.unlockedFund = 0;
+                linkedERC20.safeTransfer(address(msg.sender), funds);
+            }
+            if (stake.unlockedFund == 0 && stake.pendingFundsFirst == stake.pendingFundsLast) {
+                uint j = i + 1;
+                while (true)  {
+                    if (userPendingTracker[_user][j] == address(0)) {
+                        userPendingTracker[_user][i] = userPendingTracker[_user][j - 1];
+                        userPendingTracker[_user][j - 1] = address(0);
+                        break;
+                    }
+                    j++;
+                }
+                // process same row next round
+            }
+            else {
+                i++;
+            }
+        }
     }
 
     function claimPendingFunds(bool receiveAsBTC) external {
