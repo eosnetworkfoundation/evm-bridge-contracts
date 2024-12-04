@@ -1815,17 +1815,17 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
     }
 
     function depositWithBTC(address _target) external payable {
-        uint256 amount = msg.value;
-        require(amount > 0, "Deposit: amount must be greater than zero");
 
+        require(msg.value > depositFee, "Deposit: amount must be greater than amount of deposit fee");
+        uint256 amount = msg.value - depositFee;
         // Record the initial ERC20 balance
         uint256 initialBalance = linkedERC20.balanceOf(address(this));
 
         // Call the deposit function
-        (bool success, bytes memory data) = address(linkedERC20).call{value: amount}(
+        (bool successDeposit,) = address(linkedERC20).call{value: amount}(
             abi.encodeWithSignature("deposit()")
         );
-        require(success, "Deposit call failed");
+        require(successDeposit, "Deposit call failed");
 
         // Record the new ERC20 balance
         uint256 newBalance = linkedERC20.balanceOf(address(this));
@@ -1833,8 +1833,16 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         // Ensure the balance increase more than the amount sent
         require(newBalance >= initialBalance + amount, "Conversion failed");
 
-        // Perform the deposit operation
-        deposit(_target, amount);
+        StakeInfo storage stake = stakeInfo[_target][msg.sender];
+        stake.amount = stake.amount + amount;
+
+        // The action is aynchronously viewed from EVM and looks UNSAFE.
+        // BUT in fact the call will be executed as inline action.
+        // If the cross chain call fail, the whole tx including the EVM action will be rejected.
+        bytes memory receiver_msg = abi.encodeWithSignature("deposit(address,uint256,address)", _target, amount, msg.sender);
+        (bool success, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, receiver_msg ));
+        if(!success) { revert(); }
+
         emit Deposit(msg.sender, _target, amount);
     }
 
@@ -1915,6 +1923,14 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         // Update the stake info
         stake.amount -= auth.amount;
         stakeInfo[_toValidator][msg.sender].amount += auth.amount;
+
+
+        bytes memory withdraw_msg = abi.encodeWithSignature("withdraw(address,uint256,address)", _fromValidator, auth.amount, _user);
+        (bool wdSuccess, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, withdraw_msg ));
+        if(!wdSuccess) { revert(); }
+        bytes memory deposit_msg = abi.encodeWithSignature("deposit(address,uint256,address)", _toValidator, auth.amount, msg.sender);
+        (bool depositSuccess, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, deposit_msg ));
+        if(!depositSuccess) { revert(); }
 
         delete transferAuthorizations[_user][msg.sender]; // Remove the authorization after execution
 

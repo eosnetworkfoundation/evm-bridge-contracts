@@ -73,6 +73,14 @@ struct it_tester : evmutil_tester {
         ss << std::setfill('0') << std::setw(64 - hex_length) << 0 << std::hex << std::uppercase << x;
         return ss.str();
     }
+    std::string bool_str32(bool value) {
+        std::stringstream ss;
+        // Fill with 0s for 31 bytes
+        ss << std::setfill('0') << std::setw(62) << "0";
+        // Append '01' if true, '00' if false
+        ss << (value ? "01" : "00");
+        return ss.str();
+    }
 
     std::string str_to_hex(const std::string& str) {
         std::stringstream ss;
@@ -414,6 +422,197 @@ struct it_tester : evmutil_tester {
             throw;
         }
     }
+    void claimPendingFunds(evm_eoa& from, name validator,bool receiveAsBTC) {
+        auto target = evmc::from_hex<evmc::address>(stake_address);
+
+        auto txn = generate_tx(*target, 0, 500'000);
+        // claimPendingFunds(address,bool) = d9ac42d4
+        txn.data = evmc::from_hex("0xd9ac42d4").value();
+        auto reserved_addr = silkworm::make_reserved_address(validator.to_uint64_t());
+
+        txn.data += evmc::from_hex(address_str32(reserved_addr)).value();      // param1 (to: address)
+        txn.data += evmc::from_hex(bool_str32(receiveAsBTC)).value();          // param2 (receiveAsBTC: bool)
+        auto old_nonce = from.next_nonce;
+        from.sign(txn);
+
+        try {
+            auto r = pushtx(txn);
+            // dlog("action trace: ${a}", ("a", r));
+        } catch (...) {
+            from.next_nonce = old_nonce;
+            throw;
+        }
+    }
+
+    void claimPendingFunds(evm_eoa& from) {
+        auto target = evmc::from_hex<evmc::address>(stake_address);
+
+        auto txn = generate_tx(*target, 0, 500'000);
+        // claimPendingFunds() = 89bea32f
+        txn.data = evmc::from_hex("0x89bea32f").value();
+
+        auto old_nonce = from.next_nonce;
+        from.sign(txn);
+
+        try {
+            auto r = pushtx(txn);
+            // dlog("action trace: ${a}", ("a", r));
+        } catch (...) {
+            from.next_nonce = old_nonce;
+            throw;
+        }
+    }
+    void claimPendingFunds(evm_eoa& from, bool receiveAsBTC) {
+        auto target = evmc::from_hex<evmc::address>(stake_address);
+
+        auto txn = generate_tx(*target, 0, 500'000);
+        // claimPendingFunds(bool) = 0x4c5ae9ae
+        txn.data = evmc::from_hex("0x4c5ae9ae").value() + evmc::from_hex(bool_str32(receiveAsBTC)).value();
+
+        auto old_nonce = from.next_nonce;
+        from.sign(txn);
+
+        try {
+            auto r = pushtx(txn);
+            // dlog("action trace: ${a}", ("a", r));
+        } catch (...) {
+            from.next_nonce = old_nonce;
+            throw;
+        }
+    }
+
+    void depositWithBTC(evm_eoa& from, name validator, intx::uint256 amount) {
+        auto target = evmc::from_hex<evmc::address>(stake_address);
+
+        auto txn = generate_tx(*target, amount, 500'000);
+        // depositWithBTC(address) = 0x4c17fac1
+        txn.data = evmc::from_hex("0x4c17fac1").value();
+
+        auto reserved_addr = silkworm::make_reserved_address(validator.to_uint64_t());
+        txn.data += evmc::from_hex(address_str32(reserved_addr)).value();
+
+        auto old_nonce = from.next_nonce;
+        from.sign(txn);
+
+        try {
+            auto r = pushtx(txn);
+            // dlog("action trace: ${a}", ("a", r));
+        } catch (...) {
+            from.next_nonce = old_nonce;
+            throw;
+        }
+    }
+    void reDelegatePendingFunds(evm_eoa& from, name validator){
+        auto target = evmc::from_hex<evmc::address>(stake_address);
+
+        auto txn = generate_tx(*target, 0, 500'000);
+        // reDelegatePendingFunds(address) = 0x7471b5c0
+        txn.data = evmc::from_hex("0x7471b5c0").value();
+
+        auto reserved_addr = silkworm::make_reserved_address(validator.to_uint64_t());
+        txn.data += evmc::from_hex(address_str32(reserved_addr)).value();
+
+        auto old_nonce = from.next_nonce;
+        from.sign(txn);
+
+        try {
+            auto r = pushtx(txn);
+            // dlog("action trace: ${a}", ("a", r));
+        } catch (...) {
+            from.next_nonce = old_nonce;
+            throw;
+        }
+    }
+    void authorizeTransfer(evm_eoa& from, evm_eoa& _operator, name fromValidator, intx::uint256 amount){
+        auto target = evmc::from_hex<evmc::address>(stake_address);
+
+        auto txn = generate_tx(*target, 0, 500'000);
+        // authorizeTransfer(address) = 0x32a34ad0
+        txn.data = evmc::from_hex("0x32a34ad0").value();
+
+        auto fromValidator_addr = silkworm::make_reserved_address(fromValidator.to_uint64_t());
+
+        txn.data += evmc::from_hex(address_str32(_operator.address)).value(); // param1 (operator: address)
+        txn.data += evmc::from_hex(address_str32(fromValidator_addr)).value(); // param2 (fromValidator: address)
+        txn.data += evmc::from_hex(uint256_str32(amount)).value(); // param3 (amount: uint256)
+
+        auto old_nonce = from.next_nonce;
+        from.sign(txn);
+
+        try {
+            auto r = pushtx(txn);
+            // dlog("action trace: ${a}", ("a", r));
+        } catch (...) {
+            from.next_nonce = old_nonce;
+            throw;
+        }
+    }
+
+    void performTransfer(evm_eoa& from, evm_eoa& user, name fromValidator, name toValidator, intx::uint256 amount){
+        auto target = evmc::from_hex<evmc::address>(stake_address);
+
+        auto txn = generate_tx(*target, 0, 500'000);
+        // performTransfer(address) = 0xf5e4d8dd
+        txn.data = evmc::from_hex("0xf5e4d8dd").value();
+
+        auto fromValidator_addr = silkworm::make_reserved_address(fromValidator.to_uint64_t());
+        auto toValidator_addr = silkworm::make_reserved_address(toValidator.to_uint64_t());
+
+        txn.data += evmc::from_hex(address_str32(user.address)).value(); // param1 (operator: address)
+        txn.data += evmc::from_hex(address_str32(fromValidator_addr)).value(); // param2 (fromValidator: address)
+        txn.data += evmc::from_hex(address_str32(toValidator_addr)).value(); // param3 (fromValidator: address)
+        txn.data += evmc::from_hex(uint256_str32(amount)).value(); // param4 (amount: uint256)
+
+        auto old_nonce = from.next_nonce;
+        from.sign(txn);
+
+        try {
+            auto r = pushtx(txn);
+            // dlog("action trace: ${a}", ("a", r));
+        } catch (...) {
+            from.next_nonce = old_nonce;
+            throw;
+        }
+    }
+
+    void revokeAuthorize(evm_eoa& from) {
+        auto target = evmc::from_hex<evmc::address>(stake_address);
+
+        auto txn = generate_tx(*target, 0, 500'000);
+        // revokeAuthorize() = 0x1fd7ef06
+        txn.data = evmc::from_hex("0x1fd7ef06").value();
+
+        auto old_nonce = from.next_nonce;
+        from.sign(txn);
+
+        try {
+            auto r = pushtx(txn);
+            // dlog("action trace: ${a}", ("a", r));
+        } catch (...) {
+            from.next_nonce = old_nonce;
+            throw;
+        }
+    }
+    void revokeAuthorize(evm_eoa& from,evm_eoa& _operator) {
+        auto target = evmc::from_hex<evmc::address>(stake_address);
+
+        auto txn = generate_tx(*target, 0, 500'000);
+        // revokeAuthorize(address) = 0x005a80ac
+        txn.data = evmc::from_hex("0x005a80ac").value();
+
+        txn.data += evmc::from_hex(address_str32(_operator.address)).value();
+
+        auto old_nonce = from.next_nonce;
+        from.sign(txn);
+
+        try {
+            auto r = pushtx(txn);
+            // dlog("action trace: ${a}", ("a", r));
+        } catch (...) {
+            from.next_nonce = old_nonce;
+            throw;
+        }
+    }
 
     void claimSyncReward(evm_eoa& from, name validator) {
         auto target = evmc::from_hex<evmc::address>(helper_address);
@@ -735,6 +934,113 @@ try {
 
 }
 FC_LOG_AND_RETHROW()
+
+
+BOOST_FIXTURE_TEST_CASE(it_re_delegate, it_tester)
+try {
+
+    // Give evm1 some EOS
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), evm1.address_0x().c_str());
+
+    produce_block();
+
+    auto fee = depFee();
+    auto evmbtc1 = intx::exp(10_u256, intx::uint256(18));
+    auto eosbtc1 = 100000000;
+
+    assertstake(0);
+    //todo assert btc balance = X
+    //BOOST_REQUIRE_MESSAGE(xxxx)
+
+    depositWithBTC(evm1, "alice"_n, evmbtc1*2 + fee);
+
+    //todo assert btc balance = X - evmbtc1 - fee
+    //BOOST_REQUIRE_MESSAGE(xxxx)
+
+    produce_block();
+
+    assertstake(eosbtc1 * 2);
+    assertval("alice"_n);
+
+    withdraw(evm1,"alice"_n, evmbtc1);
+    produce_block();
+    assertstake(eosbtc1);
+    withdraw(evm1,"alice"_n, evmbtc1);
+    produce_block();
+    assertstake(0);
+
+    reDelegatePendingFunds(evm1, "alice"_n);
+    produce_block();
+    assertstake(eosbtc1 * 2);
+
+    withdraw(evm1,"alice"_n, evmbtc1);
+    produce_block();
+    assertstake(eosbtc1);
+
+    push_action(evmutil_account, "setlocktime"_n, evmutil_account, mvo()("proxy_address",stake_address)("locktime",10));
+    produce_block();
+
+    for(int i =0; i < 20; ++ i) {
+        produce_block();
+    }
+    //todo assert btc balance = x
+    //BOOST_REQUIRE_MESSAGE(xxxx)
+
+    claimPendingFunds(evm1, "alice"_n, true);
+    produce_block();
+
+    //todo assert btc balance = X + evmbtc1 - fee
+    //BOOST_REQUIRE_MESSAGE(xxxx)
+}
+FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(it_staking_transfer, it_tester)
+try {
+    auto fee = depFee();
+    auto evmbtc1 = intx::exp(10_u256, intx::uint256(18));
+    auto eosbtc1 = 100000000;
+
+
+    // Give evm1 some EOS
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), evm1.address_0x().c_str());
+
+    // Give operator some EOS
+    evm_eoa _operator;
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), _operator.address_0x().c_str());
+
+    produce_block();
+    assertstake(0);
+
+    depositWithBTC(evm1, "alice"_n, evmbtc1*2 + fee);
+    produce_block();
+    assertstake(eosbtc1 * 2);
+
+    authorizeTransfer(evm1, _operator, "alice"_n,evmbtc1);
+    produce_block();
+    performTransfer(_operator, evm1,  "alice"_n, "alice"_n, evmbtc1 * 2);
+    produce_block();
+    assertstake(eosbtc1 * 2);
+
+    // todo add _operator to staker
+    /**
+    performTransfer(_operator, evm1,  "alice"_n, "alice"_n, evmbtc1);
+    produce_block();
+    assertstake(eosbtc1);
+    // todo   assert operator stake
+    //assertstake(_operator)
+
+     authorizeTransfer(evm1, _operator, "alice"_n,evmbtc1);
+    produce_block();
+    assertstake(eosbtc1);
+    revokeAuthorize(evm1, _operator);
+    performTransfer(_operator, evm1,  "alice"_n, "alice"_n, evmbtc1);
+    produce_block();
+    assertstake(eosbtc1);
+    */
+}
+FC_LOG_AND_RETHROW()
+
+
 
 BOOST_FIXTURE_TEST_CASE(it_update, it_tester)
 try {
