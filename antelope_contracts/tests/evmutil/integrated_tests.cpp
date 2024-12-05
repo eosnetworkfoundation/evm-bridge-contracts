@@ -105,6 +105,7 @@ struct it_tester : evmutil_tester {
     std::string stake_address;
     std::string helper_address;
     evm_eoa evm1;
+    evm_eoa evm_op;
     it_tester() : evmutil_tester(true) {
         create_accounts({"alice"_n});
         transfer_token(eos_token_account, faucet_account_name, "alice"_n, make_asset(10000'00000000));
@@ -133,7 +134,7 @@ struct it_tester : evmutil_tester {
         push_action(endrmng_account,
                     "reset"_n,
                     endrmng_account,
-                    mvo()("proxy",make_key(proxy->bytes, 20))("staker",make_key(evm1.address.bytes, 20))("validator","alice"_n));
+                    mvo()("proxy",make_key(proxy->bytes, 20))("staker", make_key(evm1.address.bytes, 20))("validator","alice"_n));
         produce_block();
 
         push_action(poolreg_account,
@@ -144,11 +145,18 @@ struct it_tester : evmutil_tester {
 
     }
 
-    void assertstake(uint64_t stake) {
+    void assertstake(uint64_t stake,evm_eoa staker) {
         push_action(endrmng_account,
                     "assertstake"_n,
                     endrmng_account,
-                    mvo()("stake",stake));
+                    mvo()("stake",stake)("staker",make_key(staker.address.bytes, 20)));
+        produce_block();
+    }
+    void addstaker(evm_eoa staker) {
+        push_action(endrmng_account,
+                    "addstaker"_n,
+                    endrmng_account,
+                    mvo()("staker",make_key(staker.address.bytes, 20)));
         produce_block();
     }
 
@@ -730,12 +738,12 @@ try {
     auto fee = depFee();
     produce_block();
 
-    assertstake(0);
+    assertstake(0,evm1);
 
     stake(evm1, "alice"_n, intx::exp(10_u256, intx::uint256(18)), fee);
     produce_block();
 
-    assertstake(1'00000000);
+    assertstake(1'00000000,evm1);
 
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
@@ -753,7 +761,7 @@ try {
     withdraw(evm1,"alice"_n,  intx::exp(10_u256, intx::uint256(18)));
     produce_block();
 
-    assertstake(0);
+    assertstake(0,evm1);
 
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
@@ -796,12 +804,12 @@ try {
     auto fee = depFee();
     produce_block();
 
-    assertstake(0);
+    assertstake(0,evm1);
 
     stake(evm1, "alice"_n, intx::exp(10_u256, intx::uint256(18)), fee);
     produce_block();
 
-    assertstake(1'00000000);
+    assertstake(1'00000000,evm1);
 
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
@@ -811,7 +819,7 @@ try {
     withdraw(evm1,"alice"_n,  intx::exp(10_u256, intx::uint256(18)));
     produce_block();
 
-    assertstake(0);
+    assertstake(0,evm1);
 
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
@@ -873,12 +881,12 @@ try {
     auto fee = depFee();
     produce_block();
 
-    assertstake(0);
+    assertstake(0,evm1);
 
     stake(evm1, "alice"_n, intx::exp(10_u256, intx::uint256(18)), fee);
     produce_block();
 
-    assertstake(1'00000000);
+    assertstake(1'00000000,evm1);
     assertval("alice"_n);
 
     bal = balanceOf(evm1.address_0x().c_str());
@@ -899,7 +907,7 @@ try {
     withdraw(evm1,"bob"_n,  intx::exp(10_u256, intx::uint256(18)));
     produce_block();
 
-    assertstake(0);
+    assertstake(0,evm1);
 
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
@@ -948,9 +956,11 @@ try {
     auto evmbtc1 = intx::exp(10_u256, intx::uint256(18));
     auto eosbtc1 = 100000000;
 
-    assertstake(0);
+    assertstake(0,evm1);
     //todo assert btc balance = X
-    //BOOST_REQUIRE_MESSAGE(xxxx)
+    //auto btcBalance = get_balance(evm1, eos_token_account, eos_token_symbol).get_amount();
+    //print
+    //BOOST_REQUIRE_MESSAGE(btcBalance == 100 * evmbtc1, std::string("balance: ") + btcBalance);
 
     depositWithBTC(evm1, "alice"_n, evmbtc1*2 + fee);
 
@@ -959,23 +969,23 @@ try {
 
     produce_block();
 
-    assertstake(eosbtc1 * 2);
+    assertstake(eosbtc1 * 2,evm1);
     assertval("alice"_n);
 
     withdraw(evm1,"alice"_n, evmbtc1);
     produce_block();
-    assertstake(eosbtc1);
+    assertstake(eosbtc1,evm1);
     withdraw(evm1,"alice"_n, evmbtc1);
     produce_block();
-    assertstake(0);
+    assertstake(0,evm1);
 
     reDelegatePendingFunds(evm1, "alice"_n);
     produce_block();
-    assertstake(eosbtc1 * 2);
+    assertstake(eosbtc1 * 2,evm1);
 
     withdraw(evm1,"alice"_n, evmbtc1);
     produce_block();
-    assertstake(eosbtc1);
+    assertstake(eosbtc1,evm1);
 
     push_action(evmutil_account, "setlocktime"_n, evmutil_account, mvo()("proxy_address",stake_address)("locktime",10));
     produce_block();
@@ -1005,38 +1015,36 @@ try {
     transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), evm1.address_0x().c_str());
 
     // Give operator some EOS
-    evm_eoa _operator;
-    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), _operator.address_0x().c_str());
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), evm_op.address_0x().c_str());
 
     produce_block();
-    assertstake(0);
+    assertstake(0,evm1);
 
     depositWithBTC(evm1, "alice"_n, evmbtc1*2 + fee);
     produce_block();
-    assertstake(eosbtc1 * 2);
+    assertstake(eosbtc1 * 2,evm1);
 
-    authorizeTransfer(evm1, _operator, "alice"_n,evmbtc1);
+    authorizeTransfer(evm1, evm_op, "alice"_n,evmbtc1);
     produce_block();
-    performTransfer(_operator, evm1,  "alice"_n, "alice"_n, evmbtc1 * 2);
+    performTransfer(evm_op, evm1,  "alice"_n, "alice"_n, evmbtc1 * 2);
     produce_block();
-    assertstake(eosbtc1 * 2);
+    assertstake(eosbtc1 * 2,evm1);
 
-    // todo add _operator to staker
-    /**
-    performTransfer(_operator, evm1,  "alice"_n, "alice"_n, evmbtc1);
+
+    performTransfer(evm_op, evm1,  "alice"_n, "alice"_n, evmbtc1);
     produce_block();
-    assertstake(eosbtc1);
+    assertstake(eosbtc1,evm1);
     // todo   assert operator stake
-    //assertstake(_operator)
+    //assertstake(evm_op)
 
-     authorizeTransfer(evm1, _operator, "alice"_n,evmbtc1);
+     authorizeTransfer(evm1, evm_op, "alice"_n,evmbtc1);
     produce_block();
-    assertstake(eosbtc1);
-    revokeAuthorize(evm1, _operator);
-    performTransfer(_operator, evm1,  "alice"_n, "alice"_n, evmbtc1);
+    assertstake(eosbtc1,evm1);
+    revokeAuthorize(evm1, evm_op);
+    performTransfer(evm_op, evm1,  "alice"_n, "alice"_n, evmbtc1);
     produce_block();
-    assertstake(eosbtc1);
-    */
+    assertstake(eosbtc1,evm1);
+
 }
 FC_LOG_AND_RETHROW()
 
@@ -1070,12 +1078,12 @@ try {
     auto fee = depFee();
     produce_block();
 
-    assertstake(0);
+    assertstake(0,evm1);
 
     stake(evm1, "alice"_n, intx::exp(10_u256, intx::uint256(18)), fee);
     produce_block();
 
-    assertstake(1'00000000);
+    assertstake(1'00000000,evm1);
 
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
@@ -1107,7 +1115,7 @@ try {
     withdraw(evm1,"alice"_n,  intx::exp(10_u256, intx::uint256(18)));
     produce_block();
 
-    assertstake(0);
+    assertstake(0,evm1);
 
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
