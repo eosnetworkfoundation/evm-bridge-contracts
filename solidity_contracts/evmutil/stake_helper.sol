@@ -1663,8 +1663,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
                 abi.encodeWithSignature("withdraw(uint256)", funds)
             );
             require(success, "Withdraw call failed");
-            (bool sent, ) = payable(msg.sender).call{value: funds}("");
-            require(sent, "Transfer failed");
+            payable(msg.sender).transfer(funds);
         } else {
             linkedERC20.safeTransfer(msg.sender, funds);
         }
@@ -1754,8 +1753,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
                 abi.encodeWithSignature("withdraw(uint256)", totalFunds)
             );
             require(success, "Withdraw call failed");
-            (bool sent, ) = payable(_user).call{value: totalFunds}("");
-            require(sent, "Transfer failed");
+            payable(_user).transfer(totalFunds);
         } else {
             linkedERC20.safeTransfer(_user, totalFunds);
         }
