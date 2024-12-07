@@ -1432,6 +1432,9 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         return ((uint160(addr) & uint160(0xFffFfFffffFfFFffffFFFffF0000000000000000)) == uint160(0xBBbbBbBbbBbbBbbbBbbbBBbb0000000000000000));
     }
 
+    receive() external payable {
+    }
+
     function refreshPendingFunds(address _target, address _caller) internal {
         StakeInfo storage stake = stakeInfo[_target][_caller];
         while (stake.pendingFundsFirst < stake.pendingFundsLast) {
