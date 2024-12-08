@@ -1433,6 +1433,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
     }
 
     receive() external payable {
+        require(msg.sender == address(linkedERC20));
     }
 
     function refreshPendingFunds(address _target, address _caller) internal {
