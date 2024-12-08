@@ -1433,7 +1433,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
     }
 
     receive() external payable {
-        require(msg.sender == address(linkedERC20));
+        require(msg.sender == address(linkedERC20),"Only XBTC contract can send funds to this contract");
     }
 
     function refreshPendingFunds(address _target, address _caller) internal {
