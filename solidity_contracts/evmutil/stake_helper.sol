@@ -1862,6 +1862,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
 
             address _target = userPendingTracker[_user][i];
             StakeInfo storage stake = stakeInfo[_target][_user];
+            refreshPendingFunds(_target, _user);
 
             while (stake.pendingFundsFirst < stake.pendingFundsLast) {
                 PendingFunds storage firstEntry = stake.pendingFunds[stake.pendingFundsFirst];
@@ -1892,12 +1893,13 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
                 i++;
             }
         }
+        if(reDelegateAmount > 0){
+            stakeInfo[_newTarget][msg.sender].amount += reDelegateAmount;
 
-        stakeInfo[_newTarget][msg.sender].amount += reDelegateAmount;
-
-        bytes memory receiver_msg = abi.encodeWithSignature("deposit(address,uint256,address)", _newTarget, reDelegateAmount, msg.sender);
-        (bool success, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, receiver_msg ));
-        require(success, "Bridge call failed");
+            bytes memory receiver_msg = abi.encodeWithSignature("deposit(address,uint256,address)", _newTarget, reDelegateAmount, msg.sender);
+            (bool success, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, receiver_msg ));
+            require(success, "Bridge call failed");
+        }
 
         emit ReDelegatePendingFunds(msg.sender, _newTarget, reDelegateAmount);
     }
