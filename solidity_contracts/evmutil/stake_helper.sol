@@ -1658,18 +1658,17 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         StakeInfo storage stake = stakeInfo[_target][msg.sender];
         uint256 funds = stake.unlockedFund;
 
-        require(funds > 0, "Claim: no funds available");
-
-        stake.unlockedFund = 0;
-
-        if (receiveAsBTC) {
-            (bool success, bytes memory data) = address(linkedERC20).call(
-                abi.encodeWithSignature("withdraw(uint256)", funds)
-            );
-            require(success, "Withdraw call failed");
-            payable(msg.sender).transfer(funds);
-        } else {
-            linkedERC20.safeTransfer(msg.sender, funds);
+        if(funds > 0){
+            stake.unlockedFund = 0;
+            if (receiveAsBTC) {
+                (bool success, bytes memory data) = address(linkedERC20).call(
+                    abi.encodeWithSignature("withdraw(uint256)", funds)
+                );
+                require(success, "Withdraw call failed");
+                payable(msg.sender).transfer(funds);
+            } else {
+                linkedERC20.safeTransfer(msg.sender, funds);
+            }
         }
 
         if (stake.unlockedFund == 0 && stake.pendingFundsFirst == stake.pendingFundsLast) {
@@ -1749,17 +1748,16 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
                 i++;
             }
         }
-        // "To save gas, change this to a single transfer. To be confirmed.
-        require(totalFunds > 0, "Claim: no funds available");
-
-        if (receiveAsBTC) {
-            (bool success, bytes memory data) = address(linkedERC20).call(
-                abi.encodeWithSignature("withdraw(uint256)", totalFunds)
-            );
-            require(success, "Withdraw call failed");
-            payable(_user).transfer(totalFunds);
-        } else {
-            linkedERC20.safeTransfer(_user, totalFunds);
+        if(totalFunds > 0){
+            if (receiveAsBTC) {
+                (bool success, bytes memory data) = address(linkedERC20).call(
+                    abi.encodeWithSignature("withdraw(uint256)", totalFunds)
+                );
+                require(success, "Withdraw call failed");
+                payable(_user).transfer(totalFunds);
+            } else {
+                linkedERC20.safeTransfer(_user, totalFunds);
+            }
         }
         emit FundsClaimed(_user, address(0), totalFunds, receiveAsBTC);
     }

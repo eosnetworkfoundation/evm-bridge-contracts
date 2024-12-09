@@ -53,23 +53,6 @@ class [[eosio::contract]] stub_endrmng : public contract {
         config_t config = get_config();
         return std::find(config.stakers.begin(), config.stakers.end(), staker) != config.stakers.end();
     }
-    void addStaker(const checksum160& staker) {
-        config_t config = get_config();
-        auto it = config.stakes.find(staker);
-        eosio::check(it == config.stakes.end(), "staker already exists");
-
-        config.stakes[staker] = 0;
-        config.stakers.push_back(staker);
-
-        set_config(config);
-    }
-    uint64_t& getStakeReference( const checksum160& staker) {
-        config_t config = get_config();
-        auto it = config.stakes.find(staker);
-        check(it != config.stakes.end(), "staker not found in stakes");
-        return it->second;
-    }
-
 
     public:
     /*
@@ -143,7 +126,7 @@ void stub_endrmng::evmstake(const name& caller, const checksum160& proxy, const 
     check(proxy == config.proxy, "proxy not found");
     check(stakerExists(staker), "staker not found");
     check(validator == config.validator, "validator not found");
-    getStakeReference(staker) += quantity.amount;
+    config.stakes[staker] += quantity.amount;
 
     set_config(config);
     
@@ -155,9 +138,8 @@ void stub_endrmng::evmunstake(const name& caller, const checksum160& proxy, cons
     check(proxy == config.proxy, "proxy not found");
     check(stakerExists(staker), "staker not found");
     check(validator == config.validator, "validator not found");
-    uint64_t& stake = getStakeReference(staker);
-    check(stake>= quantity.amount, "no enough stake");
-    stake -= quantity.amount;
+    check(config.stakes[staker] >= quantity.amount, "no enough stake");
+    config.stakes[staker] -= quantity.amount;
 
     set_config(config);
 }
@@ -192,16 +174,16 @@ void stub_endrmng::reset(const checksum160& proxy, const checksum160& staker, co
     config.validator = validator;
 
     if (config.stakes.find(staker) == config.stakes.end()) {
-        config.stakes[staker] = 0;
         config.stakers.push_back(staker);
     }
+    config.stakes[staker] = 0;
+
     set_config(config);
 }
 
 void stub_endrmng::assertstake(uint64_t stake, const checksum160& staker) {
     config_t config = get_config();
-    uint64_t& configStake = getStakeReference(staker);
-    check(stake == configStake, "stake not correct: " + std::to_string(stake) + " != " + std::to_string(configStake));
+    check(stake == config.stakes[staker], "stake not correct: " + std::to_string(stake) + " != " + std::to_string(config.stakes[staker]));
 }
 void stub_endrmng::addstaker(const checksum160& staker) {
     config_t config = get_config();

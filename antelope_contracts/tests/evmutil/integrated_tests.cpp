@@ -134,7 +134,7 @@ struct it_tester : evmutil_tester {
         push_action(endrmng_account,
                     "reset"_n,
                     endrmng_account,
-                    mvo()("proxy",make_key(proxy->bytes, 20))("staker", make_key(evm1.address.bytes, 20))("validator","alice"_n));
+                    mvo()("proxy",make_key(proxy->bytes, 20))("staker",make_key(evm1.address.bytes, 20))("validator","alice"_n));
         produce_block();
 
         push_action(poolreg_account,
@@ -145,14 +145,15 @@ struct it_tester : evmutil_tester {
 
     }
 
-    void assertstake(uint64_t stake,evm_eoa staker) {
+    void assertstake(uint64_t stake,evm_eoa& staker) {
         push_action(endrmng_account,
                     "assertstake"_n,
                     endrmng_account,
                     mvo()("stake",stake)("staker",make_key(staker.address.bytes, 20)));
         produce_block();
     }
-    void addstaker(evm_eoa staker) {
+
+    void addstaker(evm_eoa& staker) {
         push_action(endrmng_account,
                     "addstaker"_n,
                     endrmng_account,
@@ -958,9 +959,7 @@ try {
 
     assertstake(0,evm1);
     //todo assert btc balance = X
-    //auto btcBalance = get_balance(evm1, eos_token_account, eos_token_symbol).get_amount();
-    //print
-    //BOOST_REQUIRE_MESSAGE(btcBalance == 100 * evmbtc1, std::string("balance: ") + btcBalance);
+    //BOOST_REQUIRE_MESSAGE(xxxx)
 
     depositWithBTC(evm1, "alice"_n, evmbtc1*2 + fee);
 
@@ -1010,6 +1009,7 @@ try {
     auto evmbtc1 = intx::exp(10_u256, intx::uint256(18));
     auto eosbtc1 = 100000000;
 
+	addstaker(evm_op);
 
     // Give evm1 some EOS
     transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), evm1.address_0x().c_str());
@@ -1035,9 +1035,9 @@ try {
     produce_block();
     assertstake(eosbtc1,evm1);
     // todo   assert operator stake
-    //assertstake(evm_op)
+    assertstake(eosbtc1,evm_op);
 
-     authorizeTransfer(evm1, evm_op, "alice"_n,evmbtc1);
+    authorizeTransfer(evm1, evm_op, "alice"_n,evmbtc1);
     produce_block();
     assertstake(eosbtc1,evm1);
     revokeAuthorize(evm1, evm_op);
