@@ -1770,7 +1770,6 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
             if (userPendingTracker[_user][i] == address(0)) {
                 break;
             }
-            i++;
             address _target = userPendingTracker[_user][i];
 
             StakeInfo storage stake = stakeInfo[_target][_user];
@@ -1788,6 +1787,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
                     break;
                 }
             }
+            i++;
         }
 
         return result;
