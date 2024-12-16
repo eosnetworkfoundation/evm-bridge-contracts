@@ -1379,8 +1379,8 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
     mapping(address => mapping(address => TransferAuthorization)) public transferAuthorizations;
     mapping(address => address[]) private transferAuthorizationsOperators;
 
-    event AuthorizeTransfer(address, address, uint256);
-    event PerformTransfer(address, address, address, uint256);
+    event AuthorizeTransfer(address, address, address, uint256);
+    event PerformTransfer(address, address, address, address, uint256);
     event ReDelegatePendingFunds(address, address, uint256);
     event FundsClaimed(address, address, uint256, bool);
 
@@ -1910,7 +1910,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         transferAuthorizations[msg.sender][_operator] = TransferAuthorization(_amount, _fromValidator,true);
         transferAuthorizationsOperators[msg.sender].push(_operator);
 
-        emit AuthorizeTransfer(msg.sender, _fromValidator, _amount);
+        emit AuthorizeTransfer(msg.sender, _operator, _fromValidator, _amount);
     }
 
     function performTransfer(address _user, address _fromValidator, address _toValidator, uint256 _amount) external {
@@ -1936,7 +1936,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
 
         delete transferAuthorizations[_user][msg.sender]; // Remove the authorization after execution
 
-        emit PerformTransfer(_user, _fromValidator, _toValidator, _amount);
+        emit PerformTransfer(_user, msg.sender, _fromValidator, _toValidator, _amount);
     }
 
 
