@@ -1379,10 +1379,10 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
     mapping(address => mapping(address => TransferAuthorization)) public transferAuthorizations;
     mapping(address => address[]) private transferAuthorizationsOperators;
 
-    event AuthorizeTransfer(address, address, address, uint256);
-    event PerformTransfer(address, address, address, address, uint256);
-    event ReDelegatePendingFunds(address, address, uint256);
-    event FundsClaimed(address, address, uint256, bool);
+    event AuthorizeTransfer(address indexed caller, address indexed operator, address indexed validator, uint256 amount);
+    event PerformTransfer(address indexed user, address indexed operator, address indexed fromValidator, address toValidator, uint256 amount);
+    event ReDelegatePendingFunds(address indexed caller, address indexed validator, uint256 amount);
+    event FundsClaimed(address indexed caller, address indexed validator, uint256 amount, bool isBTC);
 
     function initialize(address _linkedEOSAddress, address _evmAddress, IERC20 _linkedERC20, uint256 _depositFee) initializer public {
         __UUPSUpgradeable_init();
@@ -1641,15 +1641,15 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         refreshPendingFunds(_target, address(msg.sender));
 
         StakeInfo storage stake = stakeInfo[_target][msg.sender];
-
+        uint256 funds = stake.unlockedFund;
         if (stake.unlockedFund > 0) {
-            uint256 funds = stake.unlockedFund;
             stake.unlockedFund = 0;
             linkedERC20.safeTransfer(address(msg.sender), funds);
         }
         if (stake.unlockedFund == 0 && stake.pendingFundsFirst == stake.pendingFundsLast) {
             unmarkUserPendingFund(_target, address(msg.sender));
         }
+        emit FundsClaimed(msg.sender, _target, funds, false);
     }
 
     function claimPendingFunds(address _target, bool receiveAsBTC) external {
@@ -1680,6 +1680,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
     function claimPendingFunds() external {
         address _user = address(msg.sender);
         uint i = 0;
+        uint256 totalFunds = 0;
         while (true)  {
             if (userPendingTracker[_user][i] == address(0)) {
                 break;
@@ -1693,6 +1694,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
 
             if (stake.unlockedFund > 0) {
                 uint256 funds = stake.unlockedFund;
+                totalFunds += funds;
                 stake.unlockedFund = 0;
                 linkedERC20.safeTransfer(address(msg.sender), funds);
             }
@@ -1712,6 +1714,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
                 i++;
             }
         }
+        emit FundsClaimed(_user, address(0), totalFunds, false);
     }
 
     function claimPendingFunds(bool receiveAsBTC) external {
