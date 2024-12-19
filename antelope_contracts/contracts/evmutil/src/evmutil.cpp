@@ -141,9 +141,12 @@ void evmutil::dpystakeimpl() {
     require_auth(get_self());
 
 
-    uint64_t id = 2;
+    uint64_t id = 1;
     impl_contract_table_t contract_table(_self, _self.value);
-    check(contract_table.find(id) == contract_table.end(), "implementation contract already deployed");
+    auto itr = contract_table.rbegin();
+    if (itr != contract_table.rend()) {
+        id = itr->id + 1;
+    }
 
     bytes call_data;
 
