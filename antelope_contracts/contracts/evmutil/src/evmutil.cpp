@@ -140,14 +140,6 @@ uint64_t evmutil::get_next_nonce() {
 void evmutil::dpystakeimpl() {
     require_auth(get_self());
 
-
-    uint64_t id = 1;
-    impl_contract_table_t contract_table(_self, _self.value);
-    auto itr = contract_table.rbegin();
-    if (itr != contract_table.rend()) {
-        id = itr->id + 1;
-    }
-
     bytes call_data;
 
     auto reserved_addr = silkworm::make_reserved_address(receiver_account().value);
@@ -167,7 +159,7 @@ void evmutil::dpystakeimpl() {
     evmc::address impl_addr = silkworm::create_address(reserved_addr, next_nonce); 
 
     contract_table.emplace(_self, [&](auto &v) {
-        v.id = id;
+        v.id = contract_table.available_primary_key();
         v.address.resize(kAddressLength);
         memcpy(&(v.address[0]), impl_addr.bytes, kAddressLength);
     });
