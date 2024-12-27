@@ -1665,7 +1665,6 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
                     abi.encodeWithSignature("withdraw(uint256)", funds)
                 );
                 require(success, "Withdraw call failed");
-                payable(msg.sender).transfer(funds);
             } else {
                 linkedERC20.safeTransfer(msg.sender, funds);
             }
@@ -1673,6 +1672,9 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
 
         if (stake.unlockedFund == 0 && stake.pendingFundsFirst == stake.pendingFundsLast) {
             unmarkUserPendingFund(_target, msg.sender);
+        }
+        if (funds > 0) {
+            payable(msg.sender).transfer(funds);
         }
         emit FundsClaimed(msg.sender, _target, funds, receiveAsBTC);
     }
