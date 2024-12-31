@@ -156,8 +156,9 @@ void evmutil::dpystakeimpl() {
     evm_runtime::call_action call_act(config.evm_account, {{receiver_account(), "active"_n}});
     call_act.send(receiver_account(), to, value_zero, call_data, config.evm_init_gaslimit);
 
-    evmc::address impl_addr = silkworm::create_address(reserved_addr, next_nonce); 
+    evmc::address impl_addr = silkworm::create_address(reserved_addr, next_nonce);
 
+    impl_contract_table_t contract_table(_self, _self.value);
     contract_table.emplace(_self, [&](auto &v) {
         v.id = contract_table.available_primary_key();
         v.address.resize(kAddressLength);
