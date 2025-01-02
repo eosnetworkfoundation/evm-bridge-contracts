@@ -1336,10 +1336,7 @@ abstract contract UUPSUpgradeable is Initializable, IERC1822Proxiable {
 
 pragma solidity ^0.8.18;
 
-
-
-
-contract StakeHelper is Initializable, UUPSUpgradeable { 
+contract StakeHelper is Initializable, UUPSUpgradeable {
 
     using SafeERC20 for IERC20;
 
@@ -1372,6 +1369,20 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
     mapping(address => mapping(address => StakeInfo)) public stakeInfo;
 
     mapping(address => mapping(uint256 => address)) public userPendingTracker;
+
+    struct TransferAuthorization {
+        uint256 amount;
+        address target;
+        bool exists;
+    }
+
+    mapping(address => mapping(address => TransferAuthorization)) public transferAuthorizations;
+    mapping(address => address[]) private transferAuthorizationsOperators;
+
+    event AuthorizeTransfer(address indexed caller, address indexed operator, address indexed validator, uint256 amount);
+    event PerformTransfer(address indexed user, address indexed operator, address indexed fromValidator, address toValidator, uint256 amount);
+    event ReDelegatePendingFunds(address indexed caller, address indexed validator, uint256 amount);
+    event FundsClaimed(address indexed caller, address indexed validator, uint256 amount, bool isBTC);
 
     function initialize(address _linkedEOSAddress, address _evmAddress, IERC20 _linkedERC20, uint256 _depositFee) initializer public {
         __UUPSUpgradeable_init();
@@ -1419,6 +1430,10 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
 
     function _isReservedAddress(address addr) internal pure returns (bool) {
         return ((uint160(addr) & uint160(0xFffFfFffffFfFFffffFFFffF0000000000000000)) == uint160(0xBBbbBbBbbBbbBbbbBbbbBBbb0000000000000000));
+    }
+
+    receive() external payable {
+        require(msg.sender == address(linkedERC20),"Only XBTC contract can send funds to this contract");
     }
 
     function refreshPendingFunds(address _target, address _caller) internal {
@@ -1508,7 +1523,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         lockTime = _lockTime;
     }
 
-    function deposit(address _target, uint256 _amount) external payable {
+    function deposit(address _target, uint256 _amount) public payable {
         StakeInfo storage stake = stakeInfo[_target][msg.sender];
         require(msg.value == depositFee, "Deposit: must pay exact amount of deposit fee");
         if (_amount > 0) {
@@ -1575,23 +1590,8 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         bytes memory receiver_msg = abi.encodeWithSignature("withdraw(address,uint256,address)", _target, _amount, msg.sender);
         (bool success, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, receiver_msg ));
         if(!success) { revert(); }
-        
+
         emit Withdraw(msg.sender, _target, _amount);
-    }
-
-    function claimPendingFunds(address _target) external { 
-        refreshPendingFunds(_target, address(msg.sender));
-
-        StakeInfo storage stake = stakeInfo[_target][msg.sender];
-
-        if (stake.unlockedFund > 0) {
-            uint256 funds = stake.unlockedFund;
-            stake.unlockedFund = 0;
-            linkedERC20.safeTransfer(address(msg.sender), funds);
-        }
-        if (stake.unlockedFund == 0 && stake.pendingFundsFirst == stake.pendingFundsLast) {
-            unmarkUserPendingFund(_target, address(msg.sender));
-        }
     }
 
     function pendingFunds(address _target, address _user) external view returns (uint256) {
@@ -1631,20 +1631,63 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         }
         PendingFunds [] memory result = new PendingFunds[](last - first);
         for (uint i = 0; i < last - first; i++) {
-          PendingFunds storage entry = stake.pendingFunds[first + i];
-          result[i] = entry;
+            PendingFunds storage entry = stake.pendingFunds[first + i];
+            result[i] = entry;
         }
         return result;
     }
 
-    function claimPendingFunds() external { 
+    function claimPendingFunds(address _target) external {
+        refreshPendingFunds(_target, address(msg.sender));
+
+        StakeInfo storage stake = stakeInfo[_target][msg.sender];
+        uint256 funds = stake.unlockedFund;
+        if (stake.unlockedFund > 0) {
+            stake.unlockedFund = 0;
+            linkedERC20.safeTransfer(address(msg.sender), funds);
+        }
+        if (stake.unlockedFund == 0 && stake.pendingFundsFirst == stake.pendingFundsLast) {
+            unmarkUserPendingFund(_target, address(msg.sender));
+        }
+        emit FundsClaimed(msg.sender, _target, funds, false);
+    }
+
+    function claimPendingFunds(address _target, bool receiveAsBTC) external {
+        refreshPendingFunds(_target, msg.sender);
+
+        StakeInfo storage stake = stakeInfo[_target][msg.sender];
+        uint256 funds = stake.unlockedFund;
+
+        if(funds > 0){
+            stake.unlockedFund = 0;
+            if (receiveAsBTC) {
+                (bool success, bytes memory data) = address(linkedERC20).call(
+                    abi.encodeWithSignature("withdraw(uint256)", funds)
+                );
+                require(success, "Withdraw call failed");
+            } else {
+                linkedERC20.safeTransfer(msg.sender, funds);
+            }
+        }
+
+        if (stake.unlockedFund == 0 && stake.pendingFundsFirst == stake.pendingFundsLast) {
+            unmarkUserPendingFund(_target, msg.sender);
+        }
+        if (funds > 0) {
+            payable(msg.sender).transfer(funds);
+        }
+        emit FundsClaimed(msg.sender, _target, funds, receiveAsBTC);
+    }
+
+    function claimPendingFunds() external {
         address _user = address(msg.sender);
         uint i = 0;
+        uint256 totalFunds = 0;
         while (true)  {
             if (userPendingTracker[_user][i] == address(0)) {
                 break;
             }
-            
+
             address _target = userPendingTracker[_user][i];
 
             refreshPendingFunds(_target, address(msg.sender));
@@ -1653,10 +1696,11 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
 
             if (stake.unlockedFund > 0) {
                 uint256 funds = stake.unlockedFund;
+                totalFunds += funds;
                 stake.unlockedFund = 0;
                 linkedERC20.safeTransfer(address(msg.sender), funds);
             }
-            if (stake.unlockedFund == 0 && stake.pendingFundsFirst == stake.pendingFundsLast) {      
+            if (stake.unlockedFund == 0 && stake.pendingFundsFirst == stake.pendingFundsLast) {
                 uint j = i + 1;
                 while (true)  {
                     if (userPendingTracker[_user][j] == address(0)) {
@@ -1672,6 +1716,55 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
                 i++;
             }
         }
+        emit FundsClaimed(_user, address(0), totalFunds, false);
+    }
+
+    function claimPendingFunds(bool receiveAsBTC) external {
+        address _user = msg.sender;
+        uint256 totalFunds = 0;
+        uint i = 0;
+
+        while (true) {
+            if (userPendingTracker[_user][i] == address(0)) {
+                break;
+            }
+
+            address _target = userPendingTracker[_user][i];
+            refreshPendingFunds(_target, _user);
+
+            StakeInfo storage stake = stakeInfo[_target][_user];
+
+            if (stake.unlockedFund > 0) {
+                totalFunds += stake.unlockedFund;
+                stake.unlockedFund = 0;
+            }
+
+            if (stake.unlockedFund == 0 && stake.pendingFundsFirst == stake.pendingFundsLast) {
+                uint j = i + 1;
+                while (true) {
+                    if (userPendingTracker[_user][j] == address(0)) {
+                        userPendingTracker[_user][i] = userPendingTracker[_user][j - 1];
+                        userPendingTracker[_user][j - 1] = address(0);
+                        break;
+                    }
+                    j++;
+                }
+            } else {
+                i++;
+            }
+        }
+        if(totalFunds > 0){
+            if (receiveAsBTC) {
+                (bool success, bytes memory data) = address(linkedERC20).call(
+                    abi.encodeWithSignature("withdraw(uint256)", totalFunds)
+                );
+                require(success, "Withdraw call failed");
+                payable(_user).transfer(totalFunds);
+            } else {
+                linkedERC20.safeTransfer(_user, totalFunds);
+            }
+        }
+        emit FundsClaimed(_user, address(0), totalFunds, receiveAsBTC);
     }
 
     function pendingFunds(address _user) external view returns (uint256) {
@@ -1682,7 +1775,6 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
             if (userPendingTracker[_user][i] == address(0)) {
                 break;
             }
-            i++;
             address _target = userPendingTracker[_user][i];
 
             StakeInfo storage stake = stakeInfo[_target][_user];
@@ -1700,6 +1792,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
                     break;
                 }
             }
+            i++;
         }
 
         return result;
@@ -1715,7 +1808,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         }
         address [] memory result = new address[](count);
         for (uint i = 0; i < count; i++) {
-          result[i] = userPendingTracker[_user][i];
+            result[i] = userPendingTracker[_user][i];
         }
         return result;
     }
@@ -1726,4 +1819,143 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         require(success, "Address: unable to send value, dest may have reverted");
     }
 
+    function depositWithBTC(address _target) external payable {
+
+        require(msg.value > depositFee, "Deposit: amount must be greater than amount of deposit fee");
+        uint256 amount = msg.value - depositFee;
+        // Record the initial ERC20 balance
+        uint256 initialBalance = linkedERC20.balanceOf(address(this));
+
+        // Call the deposit function
+        (bool successDeposit,) = address(linkedERC20).call{value: amount}(
+            abi.encodeWithSignature("deposit()")
+        );
+        require(successDeposit, "Deposit call failed");
+
+        // Record the new ERC20 balance
+        uint256 newBalance = linkedERC20.balanceOf(address(this));
+
+        // Ensure the balance increase more than the amount sent
+        require(newBalance >= initialBalance + amount, "Conversion failed");
+
+        StakeInfo storage stake = stakeInfo[_target][msg.sender];
+        stake.amount = stake.amount + amount;
+
+        // The action is aynchronously viewed from EVM and looks UNSAFE.
+        // BUT in fact the call will be executed as inline action.
+        // If the cross chain call fail, the whole tx including the EVM action will be rejected.
+        bytes memory receiver_msg = abi.encodeWithSignature("deposit(address,uint256,address)", _target, amount, msg.sender);
+        (bool success, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, receiver_msg ));
+        if(!success) { revert(); }
+
+        emit Deposit(msg.sender, _target, amount);
+    }
+
+
+    function reDelegatePendingFunds(address _newTarget) external {
+        require(_newTarget != address(0), "Invalid target address");
+
+        address _user = msg.sender;
+        uint256 reDelegateAmount = 0;
+        uint i = 0;
+        while (true) {
+            if (userPendingTracker[_user][i] == address(0)) {
+                break;
+            }
+
+            address _target = userPendingTracker[_user][i];
+            StakeInfo storage stake = stakeInfo[_target][_user];
+            refreshPendingFunds(_target, _user);
+
+            while (stake.pendingFundsFirst < stake.pendingFundsLast) {
+                PendingFunds storage firstEntry = stake.pendingFunds[stake.pendingFundsFirst];
+                if (firstEntry.startingHeight + lockTime <= block.number) {
+                    stake.unlockedFund += firstEntry.amount;
+                    delete stake.pendingFunds[stake.pendingFundsFirst];
+                    stake.pendingFundsFirst += 1;
+                }
+                else {
+                    reDelegateAmount += firstEntry.amount;
+                    delete stake.pendingFunds[stake.pendingFundsFirst];
+                    stake.pendingFundsFirst += 1;
+                }
+            }
+
+
+            if (stake.unlockedFund == 0 && stake.pendingFundsFirst == stake.pendingFundsLast) {
+                uint j = i + 1;
+                while (true) {
+                    if (userPendingTracker[_user][j] == address(0)) {
+                        userPendingTracker[_user][i] = userPendingTracker[_user][j - 1];
+                        userPendingTracker[_user][j - 1] = address(0);
+                        break;
+                    }
+                    j++;
+                }
+            } else {
+                i++;
+            }
+        }
+        if(reDelegateAmount > 0){
+            stakeInfo[_newTarget][msg.sender].amount += reDelegateAmount;
+
+            bytes memory receiver_msg = abi.encodeWithSignature("deposit(address,uint256,address)", _newTarget, reDelegateAmount, msg.sender);
+            (bool success, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, receiver_msg ));
+            require(success, "Bridge call failed");
+        }
+
+        emit ReDelegatePendingFunds(msg.sender, _newTarget, reDelegateAmount);
+    }
+
+    function authorizeTransfer(address _operator, address _fromValidator, uint256 _amount) external {
+        require(_amount > 0, "Approve: amount must be greater than zero");
+        StakeInfo storage stake = stakeInfo[_fromValidator][msg.sender];
+        require(_amount <= stake.amount, "Approve: insufficient stake");
+
+        transferAuthorizations[msg.sender][_operator] = TransferAuthorization(_amount, _fromValidator,true);
+        transferAuthorizationsOperators[msg.sender].push(_operator);
+
+        emit AuthorizeTransfer(msg.sender, _operator, _fromValidator, _amount);
+    }
+
+    function performTransfer(address _user, address _fromValidator, address _toValidator, uint256 _amount) external {
+        TransferAuthorization storage auth = transferAuthorizations[_user][msg.sender];
+        require(auth.exists, "Permit: no authorization found");
+        require(auth.amount == _amount, "Permit: amount mismatch");
+        require(auth.target == _fromValidator, "Permit: target mismatch");
+
+        StakeInfo storage stake = stakeInfo[auth.target][_user];
+        require(auth.amount <= stake.amount, "Permit: insufficient stake");
+
+        // Update the stake info
+        stake.amount -= auth.amount;
+        stakeInfo[_toValidator][msg.sender].amount += auth.amount;
+
+
+        bytes memory withdraw_msg = abi.encodeWithSignature("withdraw(address,uint256,address)", _fromValidator, auth.amount, _user);
+        (bool wdSuccess, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, withdraw_msg ));
+        if(!wdSuccess) { revert(); }
+        bytes memory deposit_msg = abi.encodeWithSignature("deposit(address,uint256,address)", _toValidator, auth.amount, msg.sender);
+        (bool depositSuccess, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, deposit_msg ));
+        if(!depositSuccess) { revert(); }
+
+        delete transferAuthorizations[_user][msg.sender]; // Remove the authorization after execution
+
+        emit PerformTransfer(_user, msg.sender, _fromValidator, _toValidator, _amount);
+    }
+
+
+    function revokeAuthorize() external {
+        address[] storage operators = transferAuthorizationsOperators[msg.sender];
+
+        for (uint256 i = 0; i < operators.length; i++) {
+            address operator = operators[i];
+            delete transferAuthorizations[msg.sender][operator];
+        }
+
+        delete transferAuthorizationsOperators[msg.sender];
+    }
+    function revokeAuthorize(address _operator) external {
+        delete transferAuthorizations[msg.sender][_operator];
+    }
 }
