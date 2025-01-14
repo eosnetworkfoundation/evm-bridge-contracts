@@ -759,10 +759,10 @@ try {
     claim(evm1, "alice"_n);
     produce_block();
 
-    withdraw(evm1,"alice"_n,  intx::exp(10_u256, intx::uint256(18)));
+    withdraw(evm1,"alice"_n,  intx::exp(10_u256, intx::uint256(17))*5);
     produce_block();
 
-    assertstake(0,evm1);
+    assertstake(50000000,evm1);
 
     bal = balanceOf(evm1.address_0x().c_str());
     BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
@@ -770,6 +770,20 @@ try {
     produce_block();
 
     claimPendingFunds(evm1, "alice"_n);
+    produce_block();
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(17))*15, std::string("balance: ") + intx::to_string(bal));
+
+
+    withdraw(evm1,"alice"_n,  intx::exp(10_u256, intx::uint256(17))*5);
+    produce_block();
+    assertstake(0,evm1);
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    produce_block();
+
+    claimPendingFunds(evm1, "alice"_n, false);
     produce_block();
 
     bal = balanceOf(evm1.address_0x().c_str());
