@@ -1673,7 +1673,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         if (stake.unlockedFund == 0 && stake.pendingFundsFirst == stake.pendingFundsLast) {
             unmarkUserPendingFund(_target, msg.sender);
         }
-        if (funds > 0) {
+        if (funds > 0 && receiveAsBTC) {
             payable(msg.sender).transfer(funds);
         }
         emit FundsClaimed(msg.sender, _target, funds, receiveAsBTC);
