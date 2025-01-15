@@ -32,8 +32,9 @@ class [[eosio::contract]] stub_endrmng : public contract {
         std::vector<checksum160> stakers;
         name validator;
         std::map<checksum160, uint64_t> stakes;
+        bool test_xsat;
 
-        EOSLIB_SERIALIZE(config_t, (proxy)(stakers)(validator)(stakes));
+        EOSLIB_SERIALIZE(config_t, (proxy)(stakers)(validator)(stakes)(test_xsat));
     };
     typedef eosio::singleton<"config"_n, config_t> config_singleton_t;
     
@@ -102,6 +103,53 @@ class [[eosio::contract]] stub_endrmng : public contract {
     void evmnewstake(const name& caller, const checksum160& proxy, const checksum160& staker, const name& old_validator,
                     const name& new_validator, const asset& quantity);
 
+                    /**
+    * Evm stake action for XSAT.
+    * @auth scope is `evmcaller` whitelist account
+    *
+    * @param caller - the account that calls the method
+    * @param proxy - proxy address
+    * @param staker - staker address
+    * @param validator - validator address
+    * @param quantity - total number of stake
+    *
+    */
+    [[eosio::action]]
+    void evmstakexsat(const name& caller, const checksum160& proxy, const checksum160& staker, const name& validator,
+                const asset& quantity);
+
+
+    /**
+    * Evm unstake action for XSAT.
+    * @auth scope is evmcaller whitelist account
+    *
+    * @param caller - the account that calls the method
+    * @param proxy - proxy address
+    * @param staker - staker address
+    * @param validator - validator address
+    * @param quantity - cancel pledge quantity
+    *
+    */
+    [[eosio::action]]
+    void evmunstkxsat(const name& caller, const checksum160& proxy, const checksum160& staker, const name& validator,
+                    const asset& quantity);
+
+    /**
+    * Evm change stake action for XSAT.
+    * @auth scope is `evmcaller` whitelist account
+    *
+    * @param caller - the account that calls the method
+    * @param proxy - proxy address
+    * @param staker - staker address
+    * @param old_validator - old validator address
+    * @param new_validator - new validator address
+    * @param quantity - change the amount of pledge
+    *
+    */
+    [[eosio::action]]
+    void evmrestkxsat(const name& caller, const checksum160& proxy, const checksum160& staker, const name& old_validator,
+                    const name& new_validator, const asset& quantity); 
+
     /*
     * Evm claim reward action.
     * @auth scope is evmcaller whitelist account
@@ -114,7 +162,7 @@ class [[eosio::contract]] stub_endrmng : public contract {
     */
     [[eosio::action]]
     void evmclaim(const name& caller, const checksum160& proxy, const checksum160& staker, const name& validator);
-    [[eosio::action]] void reset(const checksum160& proxy, const checksum160& staker, const name& validator);
+    [[eosio::action]] void reset(const checksum160& proxy, const checksum160& staker, const name& validator, bool test_xsat);
     [[eosio::action]] void assertstake(uint64_t stake, const checksum160& staker);
     [[eosio::action]] void assertval(const name& validator);
     [[eosio::action]] void addstaker(const checksum160& staker);
@@ -122,7 +170,7 @@ class [[eosio::contract]] stub_endrmng : public contract {
 
 void stub_endrmng::evmstake(const name& caller, const checksum160& proxy, const checksum160& staker, const name& validator, const asset& quantity) {
     config_t config = get_config();
-
+    check(!config.test_xsat, "only non xsat should call into here" );
     check(proxy == config.proxy, "proxy not found");
     check(stakerExists(staker), "staker not found");
     check(validator == config.validator, "validator not found");
@@ -134,7 +182,7 @@ void stub_endrmng::evmstake(const name& caller, const checksum160& proxy, const 
 
 void stub_endrmng::evmunstake(const name& caller, const checksum160& proxy, const checksum160& staker, const name& validator, const asset& quantity) {
     config_t config = get_config();
-    
+    check(!config.test_xsat, "only non xsat should call into here" );
     check(proxy == config.proxy, "proxy not found");
     check(stakerExists(staker), "staker not found");
     check(validator == config.validator, "validator not found");
@@ -146,7 +194,7 @@ void stub_endrmng::evmunstake(const name& caller, const checksum160& proxy, cons
 
 void stub_endrmng::evmclaim(const name& caller, const checksum160& proxy, const checksum160& staker, const name& validator) {
     config_t config = get_config();
-    
+    // check(!config.test_xsat, "only non xsat should call into here" );
     check(proxy == config.proxy, "proxy not found" );
     check(stakerExists(staker), "staker not found");
     check(validator == config.validator, "validator not found");
@@ -156,7 +204,7 @@ void stub_endrmng::evmclaim(const name& caller, const checksum160& proxy, const 
 
 void stub_endrmng::evmnewstake(const name& caller, const checksum160& proxy, const checksum160& staker, const name& validator, const name& new_validator, const asset& quantity) {
     config_t config = get_config();
-    
+    check(!config.test_xsat, "only non xsat should call into here" );
     check(proxy == config.proxy, "proxy not found" );
     check(stakerExists(staker), "staker not found");
     check(validator == config.validator, "validator not found");
@@ -165,7 +213,56 @@ void stub_endrmng::evmnewstake(const name& caller, const checksum160& proxy, con
     return;
 }
 
-void stub_endrmng::reset(const checksum160& proxy, const checksum160& staker, const name& validator) {
+void stub_endrmng::evmstakexsat(const name& caller, const checksum160& proxy, const checksum160& staker, const name& validator, const asset& quantity) {
+    config_t config = get_config();
+    check(config.test_xsat, "only xsat should call into here" );
+
+    check(quantity.symbol == symbol("XSAT", 8u), "xsat symbol not correct");
+
+    check(proxy == config.proxy, "proxy not found");
+    check(stakerExists(staker), "staker not found");
+    check(validator == config.validator, "validator not found");
+    config.stakes[staker] += quantity.amount;
+
+    set_config(config);
+
+}
+
+void stub_endrmng::evmunstkxsat(const name& caller, const checksum160& proxy, const checksum160& staker, const name& validator, const asset& quantity) {
+    config_t config = get_config();
+    check(config.test_xsat, "only xsat should call into here" );
+
+    check(quantity.symbol == symbol("XSAT", 8u), "xsat symbol not correct");
+
+    check(proxy == config.proxy, "proxy not found");
+    check(stakerExists(staker), "staker not found");
+    check(validator == config.validator, "validator not found");
+    check(config.stakes[staker] >= quantity.amount, "no enough stake");
+    config.stakes[staker] -= quantity.amount;
+
+    set_config(config);
+}
+
+void stub_endrmng::evmrestkxsat(const name& caller, const checksum160& proxy, const checksum160& staker, const name& validator, const name& new_validator, const asset& quantity) {
+
+    config_t config = get_config();
+
+    // override the test for now!
+    check(false, "XSAT should not call restake in current design" );
+
+    check(config.test_xsat, "only xsat should call into here" );
+
+    check(quantity.symbol == symbol("XSAT", 8u), "xsat symbol not correct");
+
+    check(proxy == config.proxy, "proxy not found" );
+    check(stakerExists(staker), "staker not found");
+    check(validator == config.validator, "validator not found");
+    config.validator = new_validator;
+    set_config(config);
+    return;
+}
+
+void stub_endrmng::reset(const checksum160& proxy, const checksum160& staker, const name& validator, bool test_xsat) {
  
 
     config_t config;
@@ -177,6 +274,8 @@ void stub_endrmng::reset(const checksum160& proxy, const checksum160& staker, co
         config.stakers.push_back(staker);
     }
     config.stakes[staker] = 0;
+    config.test_xsat = test_xsat;
+
 
     set_config(config);
 }

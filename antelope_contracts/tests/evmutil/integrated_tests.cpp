@@ -102,8 +102,11 @@ struct it_tester : evmutil_tester {
     }
 
     std::string xbtc_address;
-    std::string stake_address;
+    std::string delegate_stake_address;
     std::string helper_address;
+    std::string stake_address;
+    std::string btc_deposit_address;
+    std::string xsat_deposit_address;
     evm_eoa evm1;
     evm_eoa evm_op;
     it_tester() : evmutil_tester(true) {
@@ -122,19 +125,22 @@ struct it_tester : evmutil_tester {
         xbtc_address = fc::variant(xbtc_addr).as_string();
         BOOST_REQUIRE_MESSAGE(xbtc_address.size() == 42, std::string("address wrong: ") + xbtc_address);
 
-        stake_address = getSolidityContractAddress();
-        BOOST_REQUIRE_MESSAGE(stake_address.size() == 42, std::string("address wrong: ") + stake_address);
+        delegate_stake_address = getSolidityContractAddress();
+        BOOST_REQUIRE_MESSAGE(delegate_stake_address.size() == 42, std::string("address wrong: ") + delegate_stake_address);
 
-        helper_address = getHelperAddress();
+        std::tie(helper_address, btc_deposit_address, xsat_deposit_address) = getHelperAddress();
         BOOST_REQUIRE_MESSAGE(helper_address.size() == 42, std::string("address wrong: ") + helper_address);
+        BOOST_REQUIRE_MESSAGE(btc_deposit_address.size() == 42, std::string("address wrong: ") + btc_deposit_address);
+        BOOST_REQUIRE_MESSAGE(xsat_deposit_address.size() == 42, std::string("address wrong: ") + xsat_deposit_address);
 
+        stake_address = delegate_stake_address;
         // init();
 
         auto proxy = evmc::from_hex<evmc::address>(stake_address);
         push_action(endrmng_account,
                     "reset"_n,
                     endrmng_account,
-                    mvo()("proxy",make_key(proxy->bytes, 20))("staker",make_key(evm1.address.bytes, 20))("validator","alice"_n));
+                    mvo()("proxy",make_key(proxy->bytes, 20))("staker",make_key(evm1.address.bytes, 20))("validator","alice"_n)("test_xsat",false));
         produce_block();
 
         push_action(poolreg_account,
@@ -191,7 +197,7 @@ struct it_tester : evmutil_tester {
         return r;
     }
 
-    std::string getHelperAddress() {
+    std::tuple<std::string, std::string, std::string> getHelperAddress() {
         auto& db = const_cast<chainbase::database&>(control->db());
 
         const auto* existing_tid = db.find<table_id_object, by_code_scope_table>(
@@ -205,8 +211,12 @@ struct it_tester : evmutil_tester {
         helpers_t r = fc::raw::unpack<helpers_t>(
             kv_obj->value.data(),
             kv_obj->value.size());
-
-        return vec_to_hex(r.reward_helper_address, true);;
+        
+        return std::tuple<std::string, std::string, std::string>{
+            vec_to_hex(r.reward_helper_address, true), 
+            vec_to_hex(r.btc_deposit_address, true), 
+            vec_to_hex(r.xsat_deposit_address, true), 
+            };
     }
 
 
@@ -1150,5 +1160,533 @@ try {
 
 }
 FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(it_basic_stake_btc_deposit, it_tester)
+try {
+    // Change target for this test
+    stake_address = btc_deposit_address;
+
+    auto proxy = evmc::from_hex<evmc::address>(stake_address);
+    push_action(endrmng_account,
+                    "reset"_n,
+                    endrmng_account,
+                    mvo()("proxy",make_key(proxy->bytes, 20))("staker",make_key(evm1.address.bytes, 20))("validator","alice"_n)("test_xsat",false));
+    produce_block();
+
+
+    // Give evm1 some EOS
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), evm1.address_0x().c_str());
+
+    produce_block();
+    push_action(evmutil_account, "setlocktime"_n, evmutil_account, mvo()("proxy_address",stake_address)("locktime",0));
+    produce_block();
+    auto token_addr = *evmc::from_hex<evmc::address>(xbtc_address);
+    
+    auto tx = generate_tx(token_addr, intx::exp(10_u256, intx::uint256(18))*2 ,10'0000);
+    evm1.sign(tx);
+    pushtx(tx);
+
+    produce_block();
+
+    auto bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18))*2, std::string("balance: ") + intx::to_string(bal));
+
+
+    approve(evm1, intx::exp(10_u256, intx::uint256(18)));
+    produce_block();
+
+
+    auto fee = depFee();
+    produce_block();
+
+    assertstake(0,evm1);
+
+    stake(evm1, "alice"_n, intx::exp(10_u256, intx::uint256(18)), fee);
+    produce_block();
+
+    assertstake(1'00000000,evm1);
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+    produce_block();
+
+    BOOST_REQUIRE_EXCEPTION(
+        claim(evm1, "bob"_n),
+        eosio_assert_message_exception, 
+        eosio_assert_message_is("validator not found"));
+
+    claim(evm1, "alice"_n);
+    produce_block();
+
+    withdraw(evm1,"alice"_n,  intx::exp(10_u256, intx::uint256(18)));
+    produce_block();
+
+    assertstake(0,evm1);
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+    produce_block();
+
+    claimPendingFunds(evm1, "alice"_n);
+    produce_block();
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18))*2, std::string("balance: ") + intx::to_string(bal));
+
+}
+FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(it_deposit_btc_btc_deposit, it_tester)
+try {
+    // Change target for this test
+    stake_address = btc_deposit_address;
+
+    auto proxy = evmc::from_hex<evmc::address>(stake_address);
+    push_action(endrmng_account,
+                    "reset"_n,
+                    endrmng_account,
+                    mvo()("proxy",make_key(proxy->bytes, 20))("staker",make_key(evm1.address.bytes, 20))("validator","alice"_n)("test_xsat",false));
+    produce_block();
+
+
+    // Give evm1 some EOS
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), evm1.address_0x().c_str());
+
+    produce_block();
+    push_action(evmutil_account, "setlocktime"_n, evmutil_account, mvo()("proxy_address",stake_address)("locktime",0));
+    produce_block();
+    auto token_addr = *evmc::from_hex<evmc::address>(xbtc_address);
+    
+    auto tx = generate_tx(token_addr, intx::exp(10_u256, intx::uint256(18)) ,10'0000);
+    evm1.sign(tx);
+    pushtx(tx);
+
+    produce_block();
+
+    auto bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+
+    approve(evm1, intx::exp(10_u256, intx::uint256(18)));
+    produce_block();
+
+
+    auto fee = depFee();
+    produce_block();
+
+    assertstake(0,evm1);
+    depositWithBTC(evm1, "alice"_n, intx::exp(10_u256, intx::uint256(18)) + fee);
+    // stake(evm1, "alice"_n, intx::exp(10_u256, intx::uint256(18)), fee);
+    produce_block();
+
+    assertstake(1'00000000,evm1);
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+    produce_block();
+
+    BOOST_REQUIRE_EXCEPTION(
+        claim(evm1, "bob"_n),
+        eosio_assert_message_exception, 
+        eosio_assert_message_is("validator not found"));
+
+    claim(evm1, "alice"_n);
+    produce_block();
+
+    withdraw(evm1,"alice"_n,  intx::exp(10_u256, intx::uint256(18)));
+    produce_block();
+
+    assertstake(0,evm1);
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+    produce_block();
+
+    claimPendingFunds(evm1, "alice"_n);
+    produce_block();
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18))*2, std::string("balance: ") + intx::to_string(bal));
+
+}
+FC_LOG_AND_RETHROW()
+
+
+BOOST_FIXTURE_TEST_CASE(it_withdraw_lock_btc_deposit, it_tester)
+try {
+    // Change target for this test
+    stake_address = btc_deposit_address;
+
+    auto proxy = evmc::from_hex<evmc::address>(stake_address);
+    push_action(endrmng_account,
+                    "reset"_n,
+                    endrmng_account,
+                    mvo()("proxy",make_key(proxy->bytes, 20))("staker",make_key(evm1.address.bytes, 20))("validator","alice"_n)("test_xsat",false));
+    produce_block();
+
+    // Give evm1 some EOS
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), evm1.address_0x().c_str());
+
+    produce_block();
+    auto token_addr = *evmc::from_hex<evmc::address>(xbtc_address);
+    
+    auto tx = generate_tx(token_addr, intx::exp(10_u256, intx::uint256(18))*2 ,10'0000);
+    evm1.sign(tx);
+    pushtx(tx);
+
+    produce_block();
+
+    auto bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18))*2, std::string("balance: ") + intx::to_string(bal));
+
+
+    approve(evm1, intx::exp(10_u256, intx::uint256(18)));
+    produce_block();
+
+
+    auto fee = depFee();
+    produce_block();
+
+    assertstake(0,evm1);
+
+    stake(evm1, "alice"_n, intx::exp(10_u256, intx::uint256(18)), fee);
+    produce_block();
+
+    assertstake(1'00000000,evm1);
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+    produce_block();
+
+    withdraw(evm1,"alice"_n,  intx::exp(10_u256, intx::uint256(18)));
+    produce_block();
+
+    assertstake(0,evm1);
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+    produce_block();
+
+    claimPendingFunds(evm1, "alice"_n);
+    produce_block();
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+    push_action(evmutil_account, "setlocktime"_n, evmutil_account, mvo()("proxy_address",stake_address)("locktime",10));
+
+    produce_block();
+    claimPendingFunds(evm1, "alice"_n);
+    produce_block();
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+    for(int i =0; i < 20; ++ i) {
+        produce_block();
+    }
+
+    claimPendingFunds(evm1, "alice"_n);
+    produce_block();
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18))*2, std::string("balance: ") + intx::to_string(bal));
+
+
+}
+FC_LOG_AND_RETHROW()
+
+
+BOOST_FIXTURE_TEST_CASE(it_blocked_actions_btc_deposit, it_tester) 
+try {
+    // Change target for this test
+    stake_address = btc_deposit_address;
+
+    auto proxy = evmc::from_hex<evmc::address>(stake_address);
+    push_action(endrmng_account,
+                    "reset"_n,
+                    endrmng_account,
+                    mvo()("proxy",make_key(proxy->bytes, 20))("staker",make_key(evm1.address.bytes, 20))("validator","alice"_n)("test_xsat",false));
+    produce_block();
+
+    // Give evm1 some EOS
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), evm1.address_0x().c_str());
+
+    produce_block();
+    auto token_addr = *evmc::from_hex<evmc::address>(xbtc_address);
+    
+    auto tx = generate_tx(token_addr, intx::exp(10_u256, intx::uint256(18))*2 ,10'0000);
+    evm1.sign(tx);
+    pushtx(tx);
+
+    produce_block();
+
+    auto bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18))*2, std::string("balance: ") + intx::to_string(bal));
+
+
+    approve(evm1, intx::exp(10_u256, intx::uint256(18)));
+    produce_block();
+
+
+    auto fee = depFee();
+    produce_block();
+
+    assertstake(0,evm1);
+
+    stake(evm1, "alice"_n, intx::exp(10_u256, intx::uint256(18)), fee);
+    produce_block();
+
+    assertstake(1'00000000,evm1);
+    assertval("alice"_n);
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+    produce_block();
+
+    // TEST: restake should fail for deposits
+    restake(evm1, "alice"_n, "bob"_n, intx::exp(10_u256, intx::uint256(18)));
+    produce_block();
+
+    assertval("alice"_n);
+
+}
+FC_LOG_AND_RETHROW()
+
+
+BOOST_FIXTURE_TEST_CASE(it_basic_stake_xsat_deposit, it_tester)
+try {
+    // Change target for this test
+    stake_address = xsat_deposit_address;
+
+    auto proxy = evmc::from_hex<evmc::address>(stake_address);
+    push_action(endrmng_account,
+                    "reset"_n,
+                    endrmng_account,
+                    mvo()("proxy",make_key(proxy->bytes, 20))("staker",make_key(evm1.address.bytes, 20))("validator","alice"_n)("test_xsat",true));
+    produce_block();
+
+
+    // Give evm1 some EOS
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), evm1.address_0x().c_str());
+
+    produce_block();
+    push_action(evmutil_account, "setlocktime"_n, evmutil_account, mvo()("proxy_address",stake_address)("locktime",0));
+    produce_block();
+    auto token_addr = *evmc::from_hex<evmc::address>(xbtc_address);
+    
+    auto tx = generate_tx(token_addr, intx::exp(10_u256, intx::uint256(18))*2 ,10'0000);
+    evm1.sign(tx);
+    pushtx(tx);
+
+    produce_block();
+
+    auto bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18))*2, std::string("balance: ") + intx::to_string(bal));
+
+
+    approve(evm1, intx::exp(10_u256, intx::uint256(18)));
+    produce_block();
+
+
+    auto fee = depFee();
+    produce_block();
+
+    assertstake(0,evm1);
+
+    stake(evm1, "alice"_n, intx::exp(10_u256, intx::uint256(18)), fee);
+    produce_block();
+
+    assertstake(1'00000000,evm1);
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+    produce_block();
+
+    BOOST_REQUIRE_EXCEPTION(
+        claim(evm1, "bob"_n),
+        eosio_assert_message_exception, 
+        eosio_assert_message_is("validator not found"));
+
+    claim(evm1, "alice"_n);
+    produce_block();
+
+    withdraw(evm1,"alice"_n,  intx::exp(10_u256, intx::uint256(18)));
+    produce_block();
+
+    assertstake(0,evm1);
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+    produce_block();
+
+    claimPendingFunds(evm1, "alice"_n);
+    produce_block();
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18))*2, std::string("balance: ") + intx::to_string(bal));
+
+}
+FC_LOG_AND_RETHROW()
+
+
+BOOST_FIXTURE_TEST_CASE(it_withdraw_lock_xsat_deposit, it_tester)
+try {
+    // Change target for this test
+    stake_address = xsat_deposit_address;
+
+    auto proxy = evmc::from_hex<evmc::address>(stake_address);
+    push_action(endrmng_account,
+                    "reset"_n,
+                    endrmng_account,
+                    mvo()("proxy",make_key(proxy->bytes, 20))("staker",make_key(evm1.address.bytes, 20))("validator","alice"_n)("test_xsat",true));
+    produce_block();
+
+    // Give evm1 some EOS
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), evm1.address_0x().c_str());
+
+    produce_block();
+    auto token_addr = *evmc::from_hex<evmc::address>(xbtc_address);
+    
+    auto tx = generate_tx(token_addr, intx::exp(10_u256, intx::uint256(18))*2 ,10'0000);
+    evm1.sign(tx);
+    pushtx(tx);
+
+    produce_block();
+
+    auto bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18))*2, std::string("balance: ") + intx::to_string(bal));
+
+
+    approve(evm1, intx::exp(10_u256, intx::uint256(18)));
+    produce_block();
+
+
+    auto fee = depFee();
+    produce_block();
+
+    assertstake(0,evm1);
+
+    stake(evm1, "alice"_n, intx::exp(10_u256, intx::uint256(18)), fee);
+    produce_block();
+
+    assertstake(1'00000000,evm1);
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+    produce_block();
+
+    withdraw(evm1,"alice"_n,  intx::exp(10_u256, intx::uint256(18)));
+    produce_block();
+
+    assertstake(0,evm1);
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+    produce_block();
+
+    claimPendingFunds(evm1, "alice"_n);
+    produce_block();
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+    push_action(evmutil_account, "setlocktime"_n, evmutil_account, mvo()("proxy_address",stake_address)("locktime",10));
+
+    produce_block();
+    claimPendingFunds(evm1, "alice"_n);
+    produce_block();
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+    for(int i =0; i < 20; ++ i) {
+        produce_block();
+    }
+
+    claimPendingFunds(evm1, "alice"_n);
+    produce_block();
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18))*2, std::string("balance: ") + intx::to_string(bal));
+
+
+}
+FC_LOG_AND_RETHROW()
+
+
+BOOST_FIXTURE_TEST_CASE(it_blocked_actions_xsat_deposit, it_tester) 
+try {
+    // Change target for this test
+    stake_address = xsat_deposit_address;
+
+    auto proxy = evmc::from_hex<evmc::address>(stake_address);
+    push_action(endrmng_account,
+                    "reset"_n,
+                    endrmng_account,
+                    mvo()("proxy",make_key(proxy->bytes, 20))("staker",make_key(evm1.address.bytes, 20))("validator","alice"_n)("test_xsat",true));
+    produce_block();
+
+    // Give evm1 some EOS
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), evm1.address_0x().c_str());
+
+    produce_block();
+    auto token_addr = *evmc::from_hex<evmc::address>(xbtc_address);
+    
+    auto tx = generate_tx(token_addr, intx::exp(10_u256, intx::uint256(18))*2 ,10'0000);
+    evm1.sign(tx);
+    pushtx(tx);
+
+    produce_block();
+
+    auto bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18))*2, std::string("balance: ") + intx::to_string(bal));
+
+
+    approve(evm1, intx::exp(10_u256, intx::uint256(18)));
+    produce_block();
+
+
+    auto fee = depFee();
+    produce_block();
+
+    assertstake(0,evm1);
+
+    // TEST: deposit with BTC to address marked as XSAT Should revert
+    depositWithBTC(evm1, "alice"_n, intx::exp(10_u256, intx::uint256(18)) + fee);
+    produce_block();
+    assertstake(0,evm1);
+
+    stake(evm1, "alice"_n, intx::exp(10_u256, intx::uint256(18)), fee);
+    produce_block();
+
+    assertstake(1'00000000,evm1);
+    assertval("alice"_n);
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+    produce_block();
+
+    // TEST: restake should fail for deposits
+    restake(evm1, "alice"_n, "bob"_n, intx::exp(10_u256, intx::uint256(18)));
+    produce_block();
+
+    assertval("alice"_n);
+
+}
+FC_LOG_AND_RETHROW()
+
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -166,6 +166,22 @@ class [[eosio::contract]] evmutil : public contract {
      */
     [[eosio::action]] void upstakeimpl(std::string proxy_address);
 
+    /**
+     * @brief Deploy the contract for validator deposits in EVM for BTC staking. 
+     * 
+     * @auth Self
+     * 
+     */
+    [[eosio::action]] void dpyvlddepbtc(std::string token_address, const eosio::asset &dep_fee, uint8_t erc20_precision);
+
+    /**
+     * @brief Deploy the contract for validator deposits in EVM for XSAT staking. 
+     * 
+     * @auth Self
+     * 
+     */
+    [[eosio::action]] void dpyvlddepsat(std::string token_address, const eosio::asset &dep_fee, uint8_t erc20_precision);
+
     // Public Helpers
     config_t get_config() const;
     void set_config(const config_t &v);
@@ -180,8 +196,9 @@ private:
 
     // Private Helpers
     void regtokenwithcodebytes(const bytes& erc20_address_bytes, const bytes& impl_address_bytes, const eosio::asset& dep_fee, uint8_t erc20_precision);
+    bytes deploy_stake_helper_proxy(const bytes& erc20_address_bytes, const bytes& impl_address_bytes, const eosio::asset& dep_fee, uint8_t erc20_precision, bool notBTC, bool isValidatorDeposits);
 
-    void handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delta_precision);
+    void handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delta_precision, bool is_deposit, bool is_xsat);
     void handle_utxo_access(const bridge_message_v0 &msg);
     void handle_rewards(const bridge_message_v0 &msg);
 

@@ -5,6 +5,7 @@
 #include <eosio/chain/abi_serializer.hpp>
 #include <eosio/chain/fixed_bytes.hpp>
 #include <eosio/testing/tester.hpp>
+
 #include <fc/crypto/hex.hpp>
 #include <fc/crypto/rand.hpp>
 #include <fc/variant_object.hpp>
@@ -72,6 +73,8 @@ struct token_t {
 
 struct helpers_t {
         bytes reward_helper_address;  // <-- contract addr
+        bytes btc_deposit_address;
+        bytes xsat_deposit_address;
     };
 
 } // namespace evmutil_test
@@ -80,7 +83,7 @@ FC_REFLECT(evmutil_test::exec_input, (context)(from)(to)(data)(value))
 FC_REFLECT(evmutil_test::exec_callback, (contract)(action))
 FC_REFLECT(evmutil_test::exec_output, (status)(data)(context))
 FC_REFLECT(evmutil_test::token_t, (id)(address)(token_address)(erc20_precision))
-FC_REFLECT(evmutil_test::helpers_t, (reward_helper_address))
+FC_REFLECT(evmutil_test::helpers_t, (reward_helper_address)(btc_deposit_address)(xsat_deposit_address))
 
 namespace evmutil_test {
 extern const eosio::chain::symbol eos_token_symbol;

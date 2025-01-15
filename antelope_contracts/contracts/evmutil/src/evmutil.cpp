@@ -224,14 +224,55 @@ void evmutil::setstakeimpl(std::string impl_address) {
     });
 }
 
-void evmutil::regtokenwithcodebytes(const bytes& erc20_address_bytes, const bytes& impl_address_bytes, const eosio::asset& dep_fee, uint8_t erc20_precision) {
+void evmutil::dpyvlddepbtc(std::string token_address, const eosio::asset &dep_fee, uint8_t erc20_precision) {
     require_auth(get_self());
+
+    helpers_t helpers = get_helpers();
+    eosio::check(!helpers.btc_deposit_address || helpers.btc_deposit_address.value().empty(), "cannot deploy again");
     
+    impl_contract_table_t contract_table(_self, _self.value);
+    eosio::check(contract_table.begin() != contract_table.end(), "no implementaion contract available");
+    auto contract_itr = contract_table.end();
+    --contract_itr;
+
+    auto token_address_bytes = from_hex(token_address);
+    eosio::check(!!token_address_bytes, "token address must be valid 0x EVM address");
+    eosio::check(token_address_bytes->size() == kAddressLength, "invalid length of token address");
+
+    bytes proxy_contract_addr = deploy_stake_helper_proxy(*token_address_bytes, contract_itr->address, dep_fee, erc20_precision, false, true);
+
+    
+    helpers.btc_deposit_address = proxy_contract_addr;
+    set_helpers(helpers);
+}
+
+void evmutil::dpyvlddepsat(std::string token_address, const eosio::asset &dep_fee, uint8_t erc20_precision) {
+    require_auth(get_self());
+
+    helpers_t helpers = get_helpers();
+
+    eosio::check(!helpers.xsat_deposit_address || helpers.xsat_deposit_address.value().empty(), "cannot deploy again");
+    
+    impl_contract_table_t contract_table(_self, _self.value);
+    eosio::check(contract_table.begin() != contract_table.end(), "no implementaion contract available");
+    auto contract_itr = contract_table.end();
+    --contract_itr;
+
+    auto token_address_bytes = from_hex(token_address);
+    eosio::check(!!token_address_bytes, "token address must be valid 0x EVM address");
+    eosio::check(token_address_bytes->size() == kAddressLength, "invalid length of token address");
+
+    bytes proxy_contract_addr = deploy_stake_helper_proxy(*token_address_bytes, contract_itr->address, dep_fee, erc20_precision, true, true);
+
+    helpers.xsat_deposit_address = proxy_contract_addr;
+    set_helpers(helpers);
+}
+
+bytes evmutil::deploy_stake_helper_proxy(const bytes& erc20_address_bytes, const bytes& impl_address_bytes, const eosio::asset& dep_fee, uint8_t erc20_precision, bool notBTC, bool isValidatorDeposits) {
     eosio::check(impl_address_bytes.size() == kAddressLength, "invalid length of implementation address");
 
     config_t config = get_config();
     
-
     // 2^(256-64) = 6.2e+57, so the precision diff is at most 57
     eosio::check(erc20_precision >= dep_fee.symbol.precision() &&
     erc20_precision <= dep_fee.symbol.precision() + 57, "evmutil precision out of range");
@@ -239,10 +280,6 @@ void evmutil::regtokenwithcodebytes(const bytes& erc20_address_bytes, const byte
     eosio::check(dep_fee.symbol == config.evm_gas_token_symbol, "deposit_fee should have native token symbol");
     intx::uint256 dep_fee_evm = dep_fee.amount;
     dep_fee_evm *= get_minimum_natively_representable(config);
-
-    token_table_t token_table(_self, _self.value);
-    auto index_symbol = token_table.get_index<"by.tokenaddr"_n>();
-    check(index_symbol.find(make_key(erc20_address_bytes)) == index_symbol.end(), "token already registered");
 
     auto reserved_addr = silkworm::make_reserved_address(receiver_account().value);
     auto evm_reserved_addr = silkworm::make_reserved_address(config.evm_account.value);
@@ -255,8 +292,8 @@ void evmutil::regtokenwithcodebytes(const bytes& erc20_address_bytes, const byte
     call_data.insert(call_data.end(), impl_address_bytes.begin(), impl_address_bytes.end());
 
     bytes constructor_data;
-    // initialize(address,address,address,uint256) => cf756fdf
-    uint8_t func_[4] = {0xcf,0x75,0x6f,0xdf};
+    // initialize(address,address,address,uint256,bool,bool) => 1d1e7e92
+    uint8_t func_[4] = {0x1d,0x1e,0x7e,0x92};
     constructor_data.insert(constructor_data.end(), func_, func_ + sizeof(func_));
 
     auto pack_uint256 = [&](bytes &ds, const intx::uint256 &val) {
@@ -290,6 +327,9 @@ void evmutil::regtokenwithcodebytes(const bytes& erc20_address_bytes, const byte
 
     pack_uint256(constructor_data, dep_fee_evm);          // offset 32
 
+    pack_uint256(constructor_data, notBTC?1:0);   // notBTC
+    pack_uint256(constructor_data, isValidatorDeposits?1:0);   // isValidatorDeposits
+
     pack_uint32(call_data, 64);                  // offset 32
     pack_string(call_data, constructor_data);    // offset 64
 
@@ -303,12 +343,26 @@ void evmutil::regtokenwithcodebytes(const bytes& erc20_address_bytes, const byte
     evm_runtime::call_action call_act(config.evm_account, {{receiver_account(), "active"_n}});
     call_act.send(receiver_account(), to, value_zero, call_data, config.evm_init_gaslimit);
 
-    evmc::address proxy_contract_addr = silkworm::create_address(reserved_addr, next_nonce); 
+    evmc::address proxy_contract_addr = silkworm::create_address(reserved_addr, next_nonce);
+    bytes result;
+    result.resize(kAddressLength, 0); 
+    memcpy(&(result[0]), proxy_contract_addr.bytes, kAddressLength);
+    return result;
+}
+
+void evmutil::regtokenwithcodebytes(const bytes& erc20_address_bytes, const bytes& impl_address_bytes, const eosio::asset& dep_fee, uint8_t erc20_precision) {
+    require_auth(get_self());
+    
+    token_table_t token_table(_self, _self.value);
+    auto index_symbol = token_table.get_index<"by.tokenaddr"_n>();
+    check(index_symbol.find(make_key(erc20_address_bytes)) == index_symbol.end(), "token already registered");
+
+    bytes proxy_contract_addr = deploy_stake_helper_proxy(erc20_address_bytes, impl_address_bytes, dep_fee, erc20_precision, false, false);
 
     token_table.emplace(_self, [&](auto &v) {
         v.id = token_table.available_primary_key();
         v.address.resize(kAddressLength, 0);
-        memcpy(&(v.address[0]), proxy_contract_addr.bytes, kAddressLength);
+        memcpy(&(v.address[0]), proxy_contract_addr.data(), kAddressLength);
         v.erc20_precision = erc20_precision;
         v.token_address.resize(kAddressLength, 0);
         memcpy(&(v.token_address[0]), erc20_address_bytes.data(), kAddressLength);
@@ -358,7 +412,7 @@ void evmutil::unregtoken(std::string proxy_address) {
     index_symbol.erase(token_table_iter);
 }
 
-void evmutil::handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delta_precision) {
+void evmutil::handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delta_precision, bool is_deposit, bool is_xsat) {
 
     check(msg.data.size() >= 4, "not enough data in bridge_message_v0");
     config_t config = get_config();
@@ -380,6 +434,7 @@ void evmutil::handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delt
         evmc::address sender_addr;
         readEvmAddress(msg.data, 4 + 32, sender_addr);
 
+        // Use same claim
         endrmng::evmclaim_action evmclaim_act(config.endrmng_account, {{receiver_account(), "active"_n}});
         evmclaim_act.send(get_self(), make_key160(msg.sender), make_key160(sender_addr.bytes, kAddressLength), dest_acc);
     } else if (app_type == 0xdc4653f4) /* deposit(address,uint256,address) */{
@@ -395,8 +450,15 @@ void evmutil::handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delt
         evmc::address sender_addr;
         readEvmAddress(msg.data, 4 + 32 + 32, sender_addr);
 
-        endrmng::evmstake_action evmstake_act(config.endrmng_account, {{receiver_account(), "active"_n}});
-        evmstake_act.send(get_self(), make_key160(msg.sender),make_key160(sender_addr.bytes, kAddressLength), dest_acc, eosio::asset(dest_amount, config.evm_gas_token_symbol));
+        if (is_xsat) {
+            endrmng::evmstakexsat_action evmstakexsat_act(config.endrmng_account, {{receiver_account(), "active"_n}});
+            evmstakexsat_act.send(get_self(), make_key160(msg.sender),make_key160(sender_addr.bytes, kAddressLength), dest_acc, eosio::asset(dest_amount, default_xsat_token_symbol));
+        }
+        else {
+            endrmng::evmstake_action evmstake_act(config.endrmng_account, {{receiver_account(), "active"_n}});
+            evmstake_act.send(get_self(), make_key160(msg.sender),make_key160(sender_addr.bytes, kAddressLength), dest_acc, eosio::asset(dest_amount, config.evm_gas_token_symbol));
+        }
+        
     } else if (app_type == 0xec8d3269) /* withdraw(address,uint256,address) */ {
         check(msg.data.size() >= 4 + 32 + 32 + 32, 
             "not enough data in bridge_message_v0 of application type 0xec8d3269");
@@ -410,8 +472,14 @@ void evmutil::handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delt
         evmc::address sender_addr;
         readEvmAddress(msg.data, 4 + 32 + 32, sender_addr);
         
-        endrmng::evmunstake_action evmunstake_act(config.endrmng_account, {{receiver_account(), "active"_n}});
-        evmunstake_act.send(get_self(), make_key160(msg.sender), make_key160(sender_addr.bytes, kAddressLength), dest_acc, eosio::asset(dest_amount, config.evm_gas_token_symbol));
+        if (is_xsat) {
+            endrmng::evmunstkxsat_action evmunstkxsat_act(config.endrmng_account, {{receiver_account(), "active"_n}});
+            evmunstkxsat_act.send(get_self(), make_key160(msg.sender), make_key160(sender_addr.bytes, kAddressLength), dest_acc, eosio::asset(dest_amount, default_xsat_token_symbol));
+        }
+        else {
+            endrmng::evmunstake_action evmunstake_act(config.endrmng_account, {{receiver_account(), "active"_n}});
+            evmunstake_act.send(get_self(), make_key160(msg.sender), make_key160(sender_addr.bytes, kAddressLength), dest_acc, eosio::asset(dest_amount, config.evm_gas_token_symbol));
+        }
     } else if (app_type == 0x2b7d501d) /* restake(address,address,uint256,address) */{
         check(msg.data.size() >= 4 + 32 + 32 + 32 + 32, 
             "not enough data in bridge_message_v0 of application type 0x97fba943");
@@ -428,8 +496,15 @@ void evmutil::handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delt
         evmc::address sender_addr;
         readEvmAddress(msg.data, 4 + 32 + 32 + 32, sender_addr);
 
-        endrmng::evmnewstake_action evmnewstake_act(config.endrmng_account, {{receiver_account(), "active"_n}});
-        evmnewstake_act.send(get_self(), make_key160(msg.sender),make_key160(sender_addr.bytes, kAddressLength), from_acc, to_acc, eosio::asset(dest_amount, config.evm_gas_token_symbol));
+        if (is_xsat || is_deposit ) {
+            // There's no valid routine to reach here by current design.
+            // Assert here for extra protection.
+            eosio::check(false, "invalid operation");
+        }
+        else {
+            endrmng::evmnewstake_action evmnewstake_act(config.endrmng_account, {{receiver_account(), "active"_n}});
+            evmnewstake_act.send(get_self(), make_key160(msg.sender),make_key160(sender_addr.bytes, kAddressLength), from_acc, to_acc, eosio::asset(dest_amount, config.evm_gas_token_symbol));
+        }
     } else {
         eosio::check(false, "unsupported bridge_message version");
     }
@@ -517,6 +592,14 @@ void evmutil::onbridgemsg(const bridge_message_t &message) {
     if (helpers.reward_helper_address == msg.sender) {
         handle_rewards(msg);
     }
+    else if (helpers.btc_deposit_address && helpers.btc_deposit_address.value() == msg.sender) {
+        // Reuse old logic. We KNOW the target is XBTC and delta-precision is 10
+        handle_endorser_stakes(msg, 10, true, false);
+    }
+    else if (helpers.xsat_deposit_address && helpers.xsat_deposit_address.value() == msg.sender) {
+        // Reuse old logic. We KNOW the target is XSAT and delta-precision is 10
+        handle_endorser_stakes(msg, 10, true, true);
+    }
     else {
         checksum256 addr_key = make_key(msg.sender);
         token_table_t token_table(_self, _self.value);
@@ -525,7 +608,7 @@ void evmutil::onbridgemsg(const bridge_message_t &message) {
 
         check(itr != index.end() && itr->address == msg.sender, "ERC-20 token not registerred");
 
-        handle_endorser_stakes(msg, itr->erc20_precision - config.evm_gas_token_symbol.precision());
+        handle_endorser_stakes(msg, itr->erc20_precision - config.evm_gas_token_symbol.precision(), false, false);
     }
 }
 
@@ -609,12 +692,17 @@ void evmutil::setlocktime(std::string proxy_address, uint64_t locktime) {
     eosio::check(!!address_bytes, "token address must be valid 0x EVM address");
     eosio::check(address_bytes->size() == kAddressLength, "invalid length of token address");
 
-    checksum256 addr_key = make_key(*address_bytes);
-    token_table_t token_table(_self, _self.value);
-    auto index = token_table.get_index<"by.address"_n>();
-    auto token_table_iter = index.find(addr_key);
+    helpers_t helpers = get_helpers();
 
-    check(token_table_iter != index.end() && token_table_iter->address == address_bytes, "ERC-20 token not registerred");
+    if (!((helpers.btc_deposit_address && helpers.btc_deposit_address.value() == *address_bytes) || 
+        (helpers.xsat_deposit_address && helpers.xsat_deposit_address.value() == *address_bytes))) {
+        checksum256 addr_key = make_key(*address_bytes);
+        token_table_t token_table(_self, _self.value);
+        auto index = token_table.get_index<"by.address"_n>();
+        auto token_table_iter = index.find(addr_key);
+
+        check(token_table_iter != index.end() && token_table_iter->address == address_bytes, "ERC-20 token not registerred");
+    }
 
     auto pack_uint256 = [&](bytes &ds, const intx::uint256 &val) {
         uint8_t val_[32] = {};
@@ -632,7 +720,7 @@ void evmutil::setlocktime(std::string proxy_address, uint64_t locktime) {
     value_zero.resize(32, 0);
 
     evm_runtime::call_action call_act(config.evm_account, {{receiver_account(), "active"_n}});
-    call_act.send(receiver_account(), token_table_iter->address, value_zero, call_data, config.evm_gaslimit);
+    call_act.send(receiver_account(), *address_bytes, value_zero, call_data, config.evm_gaslimit);
 }
 
 void evmutil::upstakeimpl(std::string proxy_address) {
