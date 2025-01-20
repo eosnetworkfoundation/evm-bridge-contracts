@@ -732,12 +732,17 @@ void evmutil::upstakeimpl(std::string proxy_address) {
     eosio::check(!!address_bytes, "token address must be valid 0x EVM address");
     eosio::check(address_bytes->size() == kAddressLength, "invalid length of token address");
 
-    checksum256 addr_key = make_key(*address_bytes);
-    token_table_t token_table(_self, _self.value);
-    auto index = token_table.get_index<"by.address"_n>();
-    auto token_table_iter = index.find(addr_key);
+    helpers_t helpers = get_helpers();
 
-    check(token_table_iter != index.end() && token_table_iter->address == address_bytes, "ERC-20 token not registerred");
+    if (!((helpers.btc_deposit_address && helpers.btc_deposit_address.value() == *address_bytes) || 
+        (helpers.xsat_deposit_address && helpers.xsat_deposit_address.value() == *address_bytes))) {
+        checksum256 addr_key = make_key(*address_bytes);
+        token_table_t token_table(_self, _self.value);
+        auto index = token_table.get_index<"by.address"_n>();
+        auto token_table_iter = index.find(addr_key);
+
+        check(token_table_iter != index.end() && token_table_iter->address == address_bytes, "ERC-20 token not registerred");
+    }
     
     impl_contract_table_t contract_table(_self, _self.value);
     eosio::check(contract_table.begin() != contract_table.end(), "no implementaion contract available");
@@ -770,7 +775,7 @@ void evmutil::upstakeimpl(std::string proxy_address) {
     value_zero.resize(32, 0);
 
     evm_runtime::call_action call_act(config.evm_account, {{receiver_account(), "active"_n}});
-    call_act.send(receiver_account(), token_table_iter->address, value_zero, call_data, config.evm_gaslimit);
+    call_act.send(receiver_account(), *address_bytes, value_zero, call_data, config.evm_gaslimit);
 }
 
 inline eosio::name evmutil::receiver_account()const {

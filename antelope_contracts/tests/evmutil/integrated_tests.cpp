@@ -1702,5 +1702,187 @@ try {
 }
 FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE(it_deposit_update, it_tester)
+try {
+    // Change target for this test
+    stake_address = btc_deposit_address;
+
+    auto proxy = evmc::from_hex<evmc::address>(stake_address);
+    push_action(endrmng_account,
+                    "reset"_n,
+                    endrmng_account,
+                    mvo()("proxy",make_key(proxy->bytes, 20))("staker",make_key(evm1.address.bytes, 20))("validator","alice"_n)("test_xsat",false));
+    produce_block();
+
+    
+    // Give evm1 some EOS
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), evm1.address_0x().c_str());
+
+    produce_block();
+    push_action(evmutil_account, "setlocktime"_n, evmutil_account, mvo()("proxy_address",stake_address)("locktime",0));
+    produce_block();
+    auto token_addr = *evmc::from_hex<evmc::address>(xbtc_address);
+    
+    auto tx = generate_tx(token_addr, intx::exp(10_u256, intx::uint256(18))*2 ,10'0000);
+    evm1.sign(tx);
+    pushtx(tx);
+
+    produce_block();
+
+    auto bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18))*2, std::string("balance: ") + intx::to_string(bal));
+
+
+    approve(evm1, intx::exp(10_u256, intx::uint256(18)));
+    produce_block();
+
+
+    auto fee = depFee();
+    produce_block();
+
+    assertstake(0,evm1);
+
+    stake(evm1, "alice"_n, intx::exp(10_u256, intx::uint256(18)), fee);
+    produce_block();
+
+    assertstake(1'00000000,evm1);
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+    produce_block();
+
+    // Update
+    auto newAddr = silkworm::create_address(evm1.address, evm1.next_nonce); 
+    auto txn = prepare_deploy_contract_tx(solidity::stakehelper::bytecode, sizeof(solidity::stakehelper::bytecode), 10'000'000);
+
+    evm1.sign(txn);
+    pushtx(txn);
+    produce_block();
+    push_action(evmutil_account, "setstakeimpl"_n, evmutil_account, mvo()("impl_address",fc::variant(newAddr).as_string()));
+
+    produce_block();
+    push_action(evmutil_account, "upstakeimpl"_n, evmutil_account, mvo()("proxy_address",stake_address));
+    produce_block();
+
+
+    BOOST_REQUIRE_EXCEPTION(
+        claim(evm1, "bob"_n),
+        eosio_assert_message_exception, 
+        eosio_assert_message_is("validator not found"));
+
+    claim(evm1, "alice"_n);
+    produce_block();
+
+    withdraw(evm1,"alice"_n,  intx::exp(10_u256, intx::uint256(18)));
+    produce_block();
+
+    assertstake(0,evm1);
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+    produce_block();
+
+    claimPendingFunds(evm1, "alice"_n);
+    produce_block();
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18))*2, std::string("balance: ") + intx::to_string(bal));
+
+}
+FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(it_deposit_xsat_update, it_tester)
+try {
+    // Change target for this test
+    stake_address = xsat_deposit_address;
+
+    auto proxy = evmc::from_hex<evmc::address>(stake_address);
+    push_action(endrmng_account,
+                    "reset"_n,
+                    endrmng_account,
+                    mvo()("proxy",make_key(proxy->bytes, 20))("staker",make_key(evm1.address.bytes, 20))("validator","alice"_n)("test_xsat",true));
+    produce_block();
+
+    
+    // Give evm1 some EOS
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100'00000000, eos_token_symbol), evm1.address_0x().c_str());
+
+    produce_block();
+    push_action(evmutil_account, "setlocktime"_n, evmutil_account, mvo()("proxy_address",stake_address)("locktime",0));
+    produce_block();
+    auto token_addr = *evmc::from_hex<evmc::address>(xbtc_address);
+    
+    auto tx = generate_tx(token_addr, intx::exp(10_u256, intx::uint256(18))*2 ,10'0000);
+    evm1.sign(tx);
+    pushtx(tx);
+
+    produce_block();
+
+    auto bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18))*2, std::string("balance: ") + intx::to_string(bal));
+
+
+    approve(evm1, intx::exp(10_u256, intx::uint256(18)));
+    produce_block();
+
+
+    auto fee = depFee();
+    produce_block();
+
+    assertstake(0,evm1);
+
+    stake(evm1, "alice"_n, intx::exp(10_u256, intx::uint256(18)), fee);
+    produce_block();
+
+    assertstake(1'00000000,evm1);
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+    produce_block();
+
+    // Update
+    auto newAddr = silkworm::create_address(evm1.address, evm1.next_nonce); 
+    auto txn = prepare_deploy_contract_tx(solidity::stakehelper::bytecode, sizeof(solidity::stakehelper::bytecode), 10'000'000);
+
+    evm1.sign(txn);
+    pushtx(txn);
+    produce_block();
+    push_action(evmutil_account, "setstakeimpl"_n, evmutil_account, mvo()("impl_address",fc::variant(newAddr).as_string()));
+
+    produce_block();
+    push_action(evmutil_account, "upstakeimpl"_n, evmutil_account, mvo()("proxy_address",stake_address));
+    produce_block();
+
+
+    BOOST_REQUIRE_EXCEPTION(
+        claim(evm1, "bob"_n),
+        eosio_assert_message_exception, 
+        eosio_assert_message_is("validator not found"));
+
+    claim(evm1, "alice"_n);
+    produce_block();
+
+    withdraw(evm1,"alice"_n,  intx::exp(10_u256, intx::uint256(18)));
+    produce_block();
+
+    assertstake(0,evm1);
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18)), std::string("balance: ") + intx::to_string(bal));
+
+    produce_block();
+
+    claimPendingFunds(evm1, "alice"_n);
+    produce_block();
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE_MESSAGE(bal == intx::exp(10_u256, intx::uint256(18))*2, std::string("balance: ") + intx::to_string(bal));
+
+}
+FC_LOG_AND_RETHROW()
+
 
 BOOST_AUTO_TEST_SUITE_END()
