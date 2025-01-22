@@ -162,6 +162,22 @@ class [[eosio::contract]] stub_endrmng : public contract {
     */
     [[eosio::action]]
     void evmclaim(const name& caller, const checksum160& proxy, const checksum160& staker, const name& validator);
+
+    /**
+    * Evm claim reward action.
+    * @auth scope is evmcaller whitelist account
+    *
+    * @param caller - the account that calls the method
+    * @param proxy - proxy address
+    * @param staker - staker address
+    * @param validator - validator address
+    * @param donate_rate - donate rate [0,10000]
+    *
+    */
+    [[eosio::action]]
+    void evmclaim2(const name& caller, const checksum160& proxy, const checksum160& staker, const name& validator,
+                const uint16_t donate_rate);
+    
     [[eosio::action]] void reset(const checksum160& proxy, const checksum160& staker, const name& validator, bool test_xsat);
     [[eosio::action]] void assertstake(uint64_t stake, const checksum160& staker);
     [[eosio::action]] void assertval(const name& validator);
@@ -199,6 +215,19 @@ void stub_endrmng::evmclaim(const name& caller, const checksum160& proxy, const 
     check(stakerExists(staker), "staker not found");
     check(validator == config.validator, "validator not found");
     
+    return;
+}
+
+void stub_endrmng::evmclaim2(const name& caller, const checksum160& proxy, const checksum160& staker, const name& validator, const uint16_t donate_rate) {
+    config_t config = get_config();
+    // check(!config.test_xsat, "only non xsat should call into here" );
+
+    check(proxy == config.proxy, "proxy not found" );
+    check(stakerExists(staker), "staker not found");
+    check(validator == config.validator, "validator not found");
+
+    check(donate_rate <= 10000, "donate rate too large" );
+
     return;
 }
 

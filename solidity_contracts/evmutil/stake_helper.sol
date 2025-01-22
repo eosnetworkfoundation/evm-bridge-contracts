@@ -1578,6 +1578,15 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         if(!success) { revert(); }
     }
 
+    function claim2(address _target, uint256 _donate_rate) external {
+        // The action is aynchronously viewed from EVM and looks UNSAFE.
+        // BUT in fact the call will be executed as inline action.
+        // If the cross chain call fail, the whole tx including the EVM action will be rejected.
+        bytes memory receiver_msg = abi.encodeWithSignature("claim2(address,address,uint256)", _target, msg.sender, _donate_rate);
+        (bool success, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, receiver_msg ));
+        if(!success) { revert(); }
+    }
+
     function withdraw(address _target, uint256 _amount) external {
         StakeInfo storage stake = stakeInfo[_target][msg.sender];
 

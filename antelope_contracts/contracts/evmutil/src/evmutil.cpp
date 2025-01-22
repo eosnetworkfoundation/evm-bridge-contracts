@@ -423,6 +423,7 @@ void evmutil::handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delt
     // 0xec8d3269 : 69328dec : withdraw(address,uint256,address)
     // 0x42b3c021 : 21c0b342 : claim(address,address)
     // 0x2b7d501d : 1d507d2b : restake(address,address,address)
+    // 0xac2fd4fc : fcd42fac : claim2(address,address,uint256)
 
     if (app_type == 0x42b3c021) /* claim(address,address) */{
         check(msg.data.size() >= 4 + 32 /*to*/ + 32 /*from*/, 
@@ -437,6 +438,25 @@ void evmutil::handle_endorser_stakes(const bridge_message_v0 &msg, uint64_t delt
         // Use same claim
         endrmng::evmclaim_action evmclaim_act(config.endrmng_account, {{receiver_account(), "active"_n}});
         evmclaim_act.send(get_self(), make_key160(msg.sender), make_key160(sender_addr.bytes, kAddressLength), dest_acc);
+    } else if (app_type == 0xac2fd4fc) /* claim2(address,address,uint256) */{
+        check(msg.data.size() >= 4 + 32 /*to*/ + 32 /*from*/ + 32 /*donate_rate*/, 
+            "not enough data in bridge_message_v0 of application type 0xac2fd4fc");
+
+        uint64_t dest_acc;
+        readExSatAccount(msg.data, 4, dest_acc);
+
+        evmc::address sender_addr;
+        readEvmAddress(msg.data, 4 + 32, sender_addr);
+
+        intx::uint256 value;
+        readUint256(msg.data, 4 + 32 + 32, value);
+
+        check(value <= 10000, "donate rate must smaller than 10000");
+
+        uint16_t donate_rate = (uint16_t)value;
+
+        endrmng::evmclaim2_action evmclaim2_act(config.endrmng_account, {{receiver_account(), "active"_n}});
+        evmclaim2_act.send(get_self(), make_key160(msg.sender), make_key160(sender_addr.bytes, kAddressLength), dest_acc, donate_rate);
     } else if (app_type == 0xdc4653f4) /* deposit(address,uint256,address) */{
         check(msg.data.size() >= 4 + 32 + 32 + 32, 
             "not enough data in bridge_message_v0 of application type 0xdc4653f4");
