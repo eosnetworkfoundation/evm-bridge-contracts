@@ -4,6 +4,7 @@
 #include <eosio/fixed_bytes.hpp>
 #include <eosio/asset.hpp>
 #include <eosio/singleton.hpp>
+#include <eosio/binary_extension.hpp>
 
 #include <evmutil/types.hpp>
 
@@ -22,8 +23,10 @@ namespace evmutil {
 
     struct [[eosio::table("helpers")]] [[eosio::contract("evmutil")]] helpers_t {
         bytes reward_helper_address;
+        binary_extension<bytes> btc_deposit_address;
+        binary_extension<bytes> xsat_deposit_address;
 
-        EOSLIB_SERIALIZE(helpers_t, (reward_helper_address));
+        EOSLIB_SERIALIZE(helpers_t, (reward_helper_address)(btc_deposit_address)(xsat_deposit_address));
     };
     typedef eosio::singleton<"helpers"_n, helpers_t> helpers_singleton_t;
     struct [[eosio::table("tokens")]] [[eosio::contract("evmutil")]] token_t {

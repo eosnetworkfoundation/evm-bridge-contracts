@@ -1383,8 +1383,11 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
     event PerformTransfer(address indexed user, address indexed operator, address indexed fromValidator, address toValidator, uint256 amount);
     event ReDelegatePendingFunds(address indexed caller, address indexed validator, uint256 amount);
     event FundsClaimed(address indexed caller, address indexed validator, uint256 amount, bool isBTC);
+    
+    bool notBTC; // default to false
+    bool isValidatorDeposits; // default to false
 
-    function initialize(address _linkedEOSAddress, address _evmAddress, IERC20 _linkedERC20, uint256 _depositFee) initializer public {
+    function initialize(address _linkedEOSAddress, address _evmAddress, IERC20 _linkedERC20, uint256 _depositFee, bool _notBTC, bool _isValidatorDeposits) initializer public {
         __UUPSUpgradeable_init();
 
         linkedERC20 = _linkedERC20;
@@ -1392,8 +1395,10 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         linkedEOSAddress = _linkedEOSAddress;
         linkedEOSAccountName = _addressToName(linkedEOSAddress);
         depositFee = _depositFee;
-        lockTime = 2419200; // 28 days
+        lockTime = _isValidatorDeposits ? 604800 : 2419200; // 7 or 28 days
         maxPendingQueueSize = 50; // A limit that normally will not be hit. Sort of last defence.
+        notBTC = _notBTC;
+        isValidatorDeposits = _isValidatorDeposits;
     }
 
     function _addressToName(address input ) internal pure returns (string memory) {
@@ -1542,6 +1547,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
     }
 
     function restake(address _from, address _to, uint256 _amount) external {
+        require(!isValidatorDeposits, "Forbidden");
         StakeInfo storage stakeFrom = stakeInfo[_from][msg.sender];
 
         require(_amount <= stakeFrom.amount, "Restake: cannot restake more than deposited amound");
@@ -1568,6 +1574,15 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         // BUT in fact the call will be executed as inline action.
         // If the cross chain call fail, the whole tx including the EVM action will be rejected.
         bytes memory receiver_msg = abi.encodeWithSignature("claim(address,address)", _target, msg.sender);
+        (bool success, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, receiver_msg ));
+        if(!success) { revert(); }
+    }
+
+    function claim2(address _target, uint256 _donate_rate) external {
+        // The action is aynchronously viewed from EVM and looks UNSAFE.
+        // BUT in fact the call will be executed as inline action.
+        // If the cross chain call fail, the whole tx including the EVM action will be rejected.
+        bytes memory receiver_msg = abi.encodeWithSignature("claim2(address,address,uint256)", _target, msg.sender, _donate_rate);
         (bool success, ) = evmAddress.call(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedEOSAccountName, true, receiver_msg ));
         if(!success) { revert(); }
     }
@@ -1653,6 +1668,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
     }
 
     function claimPendingFunds(address _target, bool receiveAsBTC) external {
+        require(!notBTC, "Linked Token is not XBTC.");
         refreshPendingFunds(_target, msg.sender);
 
         StakeInfo storage stake = stakeInfo[_target][msg.sender];
@@ -1720,6 +1736,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
     }
 
     function claimPendingFunds(bool receiveAsBTC) external {
+        require(!notBTC, "Linked Token is not XBTC.");
         address _user = msg.sender;
         uint256 totalFunds = 0;
         uint i = 0;
@@ -1820,7 +1837,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
     }
 
     function depositWithBTC(address _target) external payable {
-
+        require(!notBTC, "Linked Token is not XBTC.");
         require(msg.value > depositFee, "Deposit: amount must be greater than amount of deposit fee");
         uint256 amount = msg.value - depositFee;
         // Record the initial ERC20 balance
@@ -1853,6 +1870,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
 
 
     function reDelegatePendingFunds(address _newTarget) external {
+        require(!isValidatorDeposits, "Forbidden");
         require(_newTarget != address(0), "Invalid target address");
 
         address _user = msg.sender;
@@ -1908,6 +1926,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
     }
 
     function authorizeTransfer(address _operator, address _fromValidator, uint256 _amount) external {
+        require(!isValidatorDeposits, "Forbidden");
         require(_amount > 0, "Approve: amount must be greater than zero");
         StakeInfo storage stake = stakeInfo[_fromValidator][msg.sender];
         require(_amount <= stake.amount, "Approve: insufficient stake");
@@ -1919,6 +1938,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
     }
 
     function performTransfer(address _user, address _fromValidator, address _toValidator, uint256 _amount) external {
+        require(!isValidatorDeposits, "Forbidden");
         TransferAuthorization storage auth = transferAuthorizations[_user][msg.sender];
         require(auth.exists, "Permit: no authorization found");
         require(auth.amount == _amount, "Permit: amount mismatch");
@@ -1946,6 +1966,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
 
 
     function revokeAuthorize() external {
+        require(!isValidatorDeposits, "Forbidden");
         address[] storage operators = transferAuthorizationsOperators[msg.sender];
 
         for (uint256 i = 0; i < operators.length; i++) {
@@ -1956,6 +1977,7 @@ contract StakeHelper is Initializable, UUPSUpgradeable {
         delete transferAuthorizationsOperators[msg.sender];
     }
     function revokeAuthorize(address _operator) external {
+        require(!isValidatorDeposits, "Forbidden");
         delete transferAuthorizations[msg.sender][_operator];
     }
 }

@@ -289,6 +289,16 @@ evmutil_tester::evmutil_tester(bool use_real_evm, eosio::chain::name evm_account
 
     produce_block();
 
+
+    push_action(evmutil_account, "dpyvlddepbtc"_n, evmutil_account, mvo()("token_address",fc::variant(xbtc_addr).as_string())("dep_fee","0.01000000 BTC")("erc20_precision",18));
+
+    produce_block();
+
+    // reuse btc_address just for tests.
+    push_action(evmutil_account, "dpyvlddepsat"_n, evmutil_account, mvo()("token_address",fc::variant(xbtc_addr).as_string())("dep_fee","0.01000000 BTC")("erc20_precision",18));
+
+    produce_block();
+
     auto abi = fc::json::from_string(testing::contracts::eosio_token_abi().data()).template as<abi_def>();
     token_abi_ser.set_abi(std::move(abi), abi_serializer::create_yield_function(abi_serializer_max_time));
 }
