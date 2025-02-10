@@ -1,6 +1,9 @@
-# Exsat EVM supporting contracts
+# Exsat EVM trustless bridge
 
-This repository contains the Solidity and Antelope contracts needed to support advanced functionality of the Exsat. Including trustless bridges, staking and reward claiming.
+**The contracts for staking and claiming rewards have been moved to https://github.com/exsat-network/evmutil-contracts.**
+**This repository now only contains the code for the trustless bridge for ERC20 tokens.** 
+
+This repository contains the Solidity and Antelope contracts needed to support the trustless bridges.
 
 Those contracts (both within `solidity_contracts` and `antelope_contracts`) enable communication and tokens moves between the EVM and Native environments. 
 
