@@ -49,6 +49,11 @@ class [[eosio::contract]] erc20 : public contract {
                                     std::string evm_token_name, std::string evm_token_symbol, 
                                     const eosio::asset &ingress_fee, const eosio::asset &egress_fee, uint8_t erc20_precision);
 
+    [[eosio::action]] void regwithcode(eosio::name eos_contract_name,
+                                        std::string impl_address,
+                                    std::string evm_token_name, std::string evm_token_symbol, 
+                                    const eosio::asset &ingress_fee, const eosio::asset &egress_fee, uint8_t erc20_precision);
+
     [[eosio::action]] void addegress(const std::vector<name> &accounts);
     [[eosio::action]] void removeegress(const std::vector<name> &accounts);
     [[eosio::action]] void setegressfee(eosio::name token_contract, eosio::symbol_code token_symbol_code, const eosio::asset &egress_fee);
@@ -140,6 +145,8 @@ class [[eosio::contract]] erc20 : public contract {
     void handle_call_upgrade(const bytes& proxy_address);
 
 private:
+void regtokenwithcodebytes(eosio::name token_contract,  const bytes& address_bytes, std::string evm_token_name, std::string evm_token_symbol, const eosio::asset& ingress_fee, const eosio::asset &egress_fee, uint8_t erc20_precision);
+   
     eosio::name receiver_account()const;
 };
 

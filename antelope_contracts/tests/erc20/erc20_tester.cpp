@@ -212,7 +212,7 @@ erc20_tester::erc20_tester(bool use_real_evm, eosio::chain::name evm_account_, s
     produce_block();
 
     evm_eoa deployer;
-    evmc::address impl_addr = silkworm::create_address(deployer.address, deployer.next_nonce); 
+    impl_addr = silkworm::create_address(deployer.address, deployer.next_nonce); 
 
     if (use_real_evm) {
         try {
