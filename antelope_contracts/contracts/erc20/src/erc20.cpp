@@ -5,9 +5,15 @@
 
 #include <erc20/bytecode.hpp>
 #include <erc20/proxy_bytecode.hpp>
+#include <erc20/evm2native_bytecode.hpp>
 
 #include <silkworm/core/execution/address.hpp>
 #include <silkworm/core/common/util.hpp>
+
+// avoid solidity compiler generating emtpy bytecodes
+static_assert(sizeof(solidity::erc20::bytecode) >= 16);
+static_assert(sizeof(solidity::proxy::bytecode) >= 16);
+static_assert(sizeof(solidity::evm2native::bytecode) >= 16);
 
 namespace eosio {
    namespace internal_use_do_not_use {
@@ -103,6 +109,38 @@ void erc20::upgradeto(std::string impl_address) {
         v.id = contract_table.available_primary_key();
         v.address.resize(kAddressLength);
         memcpy(&(v.address[0]), address_bytes->data(), kAddressLength);
+    });
+}
+
+void erc20::upgdevm2nat() {
+    require_auth(get_self());
+
+    uint64_t id = 0;
+    evm2native_impl_table_t contract_table(_self, _self.value);
+    check(contract_table.find(id) == contract_table.end(), "evm2native implementation contract already deployed");
+
+    bytes call_data;
+
+    auto reserved_addr = silkworm::make_reserved_address(receiver_account().value);
+    initialize_data(call_data, solidity::evm2native::bytecode);
+
+    bytes to = {};
+    bytes value_zero; 
+    value_zero.resize(32, 0);
+
+    uint64_t next_nonce = get_next_nonce();
+
+    // required account opened in evm_runtime
+    config_t config = get_config();
+    evm_runtime::call_action call_act(config.evm_account, {{receiver_account(), "active"_n}});
+    call_act.send(receiver_account(), to, value_zero, call_data, config.evm_init_gaslimit);
+
+    evmc::address impl_addr = silkworm::create_address(reserved_addr, next_nonce); 
+
+    contract_table.emplace(_self, [&](auto &v) {
+        v.id = contract_table.available_primary_key();
+        v.address.resize(kAddressLength);
+        memcpy(&(v.address[0]), impl_addr.bytes, kAddressLength);
     });
 }
 
