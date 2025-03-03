@@ -935,7 +935,7 @@ contract Evm2Native is Initializable, UUPSUpgradeable {
     address evm_address; 
     IERC20  token;
 
-    function initialize(address _evm_address, address _token_address, uint8 _host_precision, uint256 _egressFee) initializer public {
+    function initialize(address _evm_address, address _token_address, uint8 _host_precision, uint8 _evm_precision, uint256 _egressFee) initializer public {
         suspended = false;
         owner = msg.sender;              // e.g eosio.erc2o
         evm_address = _evm_address;      // e.g eosio.evm
@@ -944,6 +944,7 @@ contract Evm2Native is Initializable, UUPSUpgradeable {
         host_precision = _host_precision;
         egressFee = _egressFee;
         require(evm_precision >= host_precision, "invalid host_precision");
+        require(evm_precision == _evm_precision, "invalid evm precision check");
         mult_factor = 10**(evm_precision - host_precision);
     }
 

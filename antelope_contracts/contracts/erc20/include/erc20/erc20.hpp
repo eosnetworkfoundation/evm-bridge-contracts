@@ -56,7 +56,8 @@ class [[eosio::contract]] erc20 : public contract {
     // register evm->native token bridge for a specific erc20 token
     [[eosio::action]] void regevm2nat(std::string erc20_token_address, 
                                       eosio::name native_token_contract,
-                                      const eosio::asset &ingress_fee, const eosio::asset &egress_fee, uint8_t erc20_precision);
+                                      const eosio::asset &ingress_fee, const eosio::asset &egress_fee,
+                                      uint8_t erc20_precision, std::string override_impl_address);
 
     [[eosio::action]] void addegress(const std::vector<name> &accounts);
     [[eosio::action]] void removeegress(const std::vector<name> &accounts);
@@ -86,10 +87,6 @@ class [[eosio::contract]] erc20 : public contract {
         uint64_t id = 0;
         bytes address;
         uint16_t version = 0;
-
-        // version 0:
-        //function initialize(address _evm_address, address _token_address, uint8 _host_precision, uint256 _egressFee)
-
         uint64_t primary_key() const {
             return id;
         }
@@ -126,6 +123,7 @@ class [[eosio::contract]] erc20 : public contract {
                                indexed_by<"by.symbol"_n, const_mem_fun<token_t, uint128_t, &token_t::by_contract_symbol> >,
                                indexed_by<"by.address"_n, const_mem_fun<token_t, checksum256, &token_t::by_address> > >
         token_table_t;
+
     struct [[eosio::table("egresslist")]] allowed_egress_account {
         eosio::name account;
 
