@@ -347,7 +347,7 @@ void erc20::regevm2nat(std::string erc20_token_address,
         v.balance.amount = 0;
         v.fee_balance = v.balance;
         v.erc20_precision = erc20_precision;
-        v.is_evm_to_native = true;
+        v._is_evm_to_native = true;
     });
 }
 
@@ -394,10 +394,7 @@ void erc20::onbridgemsg(const bridge_message_t &message) {
 
         intx::uint256 value = read_uint256(msg, 4 + 32);
 
-        bool is_evm_to_native = false;
-        if (itr->is_evm_to_native.has_value()) is_evm_to_native = *(itr->is_evm_to_native);
-
-        if (is_evm_to_native == false) {
+        if (itr->is_evm_to_native() == false) {
             intx::uint256 mult = intx::exp(10_u256, intx::uint256(itr->erc20_precision - itr->ingress_fee.symbol.precision()));
             check(value % mult == 0_u256, "bridge amount can not have dust");
             value /= mult;
@@ -426,7 +423,7 @@ void erc20::onbridgemsg(const bridge_message_t &message) {
         eosio::token::transfer_action transfer_act(itr->token_contract, {{get_self(), "active"_n}});
         transfer_act.send(get_self(), dest_eos_acct, eosio::asset(dest_amount, itr->ingress_fee.symbol), memo);
 
-        if (is_evm_to_native == false) {
+        if (itr->is_evm_to_native() == false) {
             token_table.modify(*itr, _self, [&](auto &v) {
                 v.balance.amount -= dest_amount;
             });
@@ -441,6 +438,11 @@ void erc20::transfer(eosio::name from, eosio::name to, eosio::asset quantity,
 
     if (to != get_self() || from == get_self()) return;
 
+    if (memo == get_self().to_string()) { 
+        // if memo is itself, it is considerred the token is given to the contract. (no bridge ops)
+        return;
+    }
+
     token_table_t token_table(_self, _self.value);
     auto index = token_table.get_index<"by.symbol"_n>();
     auto itr = index.find(token_symbol_key(get_first_receiver(), quantity.symbol.code()));
@@ -454,7 +456,7 @@ void erc20::transfer(eosio::name from, eosio::name to, eosio::asset quantity,
     if (memo.size() == 42 && memo[0] == '0' && memo[1] == 'x') {
         handle_erc20_transfer(*itr, quantity, memo);
         token_table.modify(*itr, _self, [&](auto &v) {
-            if (!v.is_evm_to_native.has_value() || *(v.is_evm_to_native) == false) {
+            if (v.is_evm_to_native() == false) {
                 v.balance += quantity;
             }
             v.fee_balance += v.ingress_fee; 
@@ -472,7 +474,7 @@ void erc20::handle_erc20_transfer(const token_t &token, eosio::asset quantity, c
 
     intx::uint256 value((uint64_t)quantity.amount);
 
-    if (!token.is_evm_to_native.has_value() || *(token.is_evm_to_native) == false) {
+    if (token.is_evm_to_native() == false) {
         value *= intx::exp(10_u256, intx::uint256(token.erc20_precision - quantity.symbol.precision()));
     }
 

@@ -85,12 +85,12 @@ class [[eosio::contract]] erc20 : public contract {
 
     struct [[eosio::table("evm2natiimpl")]] evm2native_impl_t { // evm to native
         uint64_t id = 0;
-        bytes address;
+        bytes    address;
         uint16_t version = 0;
         uint64_t primary_key() const {
             return id;
         }
-        EOSLIB_SERIALIZE(evm2native_impl_t, (id)(address));
+        EOSLIB_SERIALIZE(evm2native_impl_t, (id)(address)(version));
     };
     typedef eosio::multi_index<"evm2natiimpl"_n, evm2native_impl_t> evm2native_impl_table_t;
 
@@ -101,8 +101,8 @@ class [[eosio::contract]] erc20 : public contract {
         eosio::asset ingress_fee;
         eosio::asset balance;  // total amount in EVM side, only valid for native->evm tokens
         eosio::asset fee_balance;
-        uint8_t erc20_precision = 0; // only valid for native->evm tokens
-        eosio::binary_extension<bool> is_evm_to_native{false};
+        uint8_t erc20_precision = 0;
+        eosio::binary_extension<bool> _is_evm_to_native{false};
 
         uint64_t primary_key() const {
             return id;
@@ -116,8 +116,12 @@ class [[eosio::contract]] erc20 : public contract {
         checksum256 by_address() const {
             return make_key(address);
         }
+        bool is_evm_to_native() const {
+            if (_is_evm_to_native.has_value()) return _is_evm_to_native.value();
+            return false;
+        }
 
-        EOSLIB_SERIALIZE(token_t, (id)(token_contract)(address)(ingress_fee)(balance)(fee_balance)(erc20_precision)(is_evm_to_native));
+        EOSLIB_SERIALIZE(token_t, (id)(token_contract)(address)(ingress_fee)(balance)(fee_balance)(erc20_precision)(_is_evm_to_native));
     };
     typedef eosio::multi_index<"tokens"_n, token_t,
                                indexed_by<"by.symbol"_n, const_mem_fun<token_t, uint128_t, &token_t::by_contract_symbol> >,

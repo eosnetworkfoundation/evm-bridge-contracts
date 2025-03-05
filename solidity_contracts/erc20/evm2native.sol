@@ -934,10 +934,17 @@ contract Evm2Native is Initializable, UUPSUpgradeable {
     uint256 egressFee;
     address evm_address; 
     IERC20  token;
+    string  linkedOwnerName;
 
-    function initialize(address _evm_address, address _token_address, uint8 _host_precision, uint8 _evm_precision, uint256 _egressFee) initializer public {
+    function initialize(address _evm_address, 
+                        address _token_address, 
+                        uint8 _host_precision, 
+                        uint8 _evm_precision, 
+                        uint256 _egressFee) initializer public {
+        __UUPSUpgradeable_init();
         suspended = false;
         owner = msg.sender;              // e.g eosio.erc2o
+        linkedOwnerName = _addressToName(owner);
         evm_address = _evm_address;      // e.g eosio.evm
         token = IERC20( _token_address); // ERC-20 token address
         evm_precision = token.decimals();
@@ -946,6 +953,34 @@ contract Evm2Native is Initializable, UUPSUpgradeable {
         require(evm_precision >= host_precision, "invalid host_precision");
         require(evm_precision == _evm_precision, "invalid evm precision check");
         mult_factor = 10**(evm_precision - host_precision);
+    }
+
+    function _addressToName(address input) internal pure returns (string memory) {
+        require(_isReservedAddress(input));
+        uint64 a = uint64(uint160(input));
+        bytes memory bstr = new bytes(12);
+
+        uint count = 0;
+        for (uint i = 0; i < 12 ; i++) {
+            uint64 c = (a >> (64 - 5*(i+1))) & uint64(31);
+            if (c == 0) {
+                bstr[i] = bytes1(uint8(46)); // .
+            }
+            else if (c <= 5) {
+                bstr[i] = bytes1(uint8(c + 48)); // '0' + b
+                count = i + 1;
+            }
+            else {
+                bstr[i] = bytes1(uint8(c - 6 + 97)); // 'a' + b - 6
+                count = i + 1;
+            }
+        }
+
+        bytes memory bstrTrimmed = new bytes(count);
+        for (uint j = 0; j < count; j++) {
+            bstrTrimmed[j] = bstr[j];
+        }
+        return string(bstrTrimmed);
     }
 
     function _authorizeUpgrade(address) internal virtual override {
@@ -976,7 +1011,7 @@ contract Evm2Native is Initializable, UUPSUpgradeable {
         // Call bridgeMessage of EVM Runtime
         // sha("bridgeTransferV0(address,uint256,string)") = 0x653332e5
         bytes memory receiver_msg = abi.encodeWithSignature("bridgeTransferV0(address,uint256,string)", to, host_amount, memo);
-        (bool success, ) = evm_address.call{value: msg.value}(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", owner, true, receiver_msg ));
+        (bool success, ) = evm_address.call{value: msg.value}(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedOwnerName, true, receiver_msg ));
         if(!success) { revert(); }
         return success;
     }
