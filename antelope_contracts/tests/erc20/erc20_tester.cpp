@@ -43,11 +43,11 @@ void to_variant(const evmc::address& o, fc::variant& v)
 namespace erc20_test {
 const eosio::chain::symbol token_symbol(4u, "USDT");
 const eosio::chain::symbol eos_token_symbol(4u, "EOS");
+const eosio::chain::name gold_token_account("goldgoldgold"); // testing evm->native bridge
 const eosio::chain::name evm_account("eosio.evm");
 const eosio::chain::name faucet_account_name("eosio.faucet");
 const eosio::chain::name erc20_account("eosio.erc2o");
 const eosio::chain::name evmin_account("eosio.evmin");
-
 
 evm_eoa::evm_eoa(std::basic_string<uint8_t> optional_private_key)
 {
@@ -115,7 +115,7 @@ evm_eoa::~evm_eoa() { secp256k1_context_destroy(ctx); }
 
 
 erc20_tester::erc20_tester(bool use_real_evm, eosio::chain::name evm_account_, std::string native_symbol_str, eosio::chain::name eos_token_account_) : evm_account(evm_account_), native_symbol(symbol::from_string(native_symbol_str)), eos_token_account(eos_token_account_) {
-    auto def_conf = default_config(tempdir, 4096);
+    auto def_conf = default_config(tempdir, 65536);
 
     cfg = def_conf.first;
     init(def_conf.first, def_conf.second, testing::call_startup_t::yes);
@@ -135,9 +135,10 @@ erc20_tester::erc20_tester(bool use_real_evm, eosio::chain::name evm_account_, s
 
     produce_block();
 
-    create_accounts({eos_token_account, evm_account, token_account, faucet_account_name, erc20_account});
+    create_accounts({eos_token_account, evm_account, token_account, faucet_account_name, erc20_account, gold_token_account});
     create_account(evmin_account, config::system_account_name, false, true);
 
+    // eosio.token
     set_code(eos_token_account, testing::contracts::eosio_token_wasm());
     set_abi(eos_token_account, testing::contracts::eosio_token_abi().data());
 
@@ -151,6 +152,7 @@ erc20_tester::erc20_tester(bool use_real_evm, eosio::chain::name evm_account_, s
                 mvo()("to", faucet_account_name)("quantity", asset(1'000'000'000'0000, native_symbol))("memo", ""));
     produce_block();
 
+    // tethertether
     set_code(token_account, testing::contracts::eosio_token_wasm());
     set_abi(token_account, testing::contracts::eosio_token_abi().data());
 
@@ -162,6 +164,20 @@ erc20_tester::erc20_tester(bool use_real_evm, eosio::chain::name evm_account_, s
                 "issue"_n,
                 token_account,
                 mvo()("to", faucet_account_name)("quantity", asset(1'000'000'000'0000, symbol::from_string("4,USDT")))("memo", ""));
+
+    // create and issue mirrored GOLD token to erc2o account
+    set_code(gold_token_account, testing::contracts::eosio_token_wasm());
+    set_abi(gold_token_account, testing::contracts::eosio_token_abi().data());
+
+    push_action(gold_token_account,
+                "create"_n,
+                gold_token_account,
+                mvo()("issuer", gold_token_account)("maximum_supply", asset(100'000'000'0000, symbol::from_string("4,GOLD"))));
+    push_action(gold_token_account,
+                "issue"_n,
+                gold_token_account,
+                mvo()("to", erc20_account)("quantity", asset(100'000'000'0000, symbol::from_string("4,GOLD")))("memo", erc20_account.to_string()));
+
 
     set_code(evmin_account, testing::contracts::evm_deposit_proxy_wasm());
 
