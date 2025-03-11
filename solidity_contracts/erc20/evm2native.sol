@@ -926,15 +926,15 @@ interface IERC20 {
 }
 
 contract Evm2Native is Initializable, UUPSUpgradeable {
-    address owner;
-    bool    suspended;
-    uint8   evm_precision;
-    uint8   host_precision;
-    uint256 mult_factor;
-    uint256 egressFee;
-    address evm_address; 
-    IERC20  token;
-    string  linkedOwnerName;
+    address public owner;
+    bool    public suspended;
+    uint8   public evm_precision;
+    uint8   public host_precision;
+    uint256 public mult_factor;
+    uint256 public egressFee;
+    address public evm_address; 
+    IERC20  public token;
+    string  public linkedOwnerName;
 
     function initialize(address _evm_address, 
                         address _token_address, 

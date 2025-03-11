@@ -410,9 +410,6 @@ FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(it_upgrade, it_tester)
 try {
-
-    
-
     evm_eoa evm1;
     auto addr_alice = silkworm::make_reserved_address("alice"_n.to_uint64_t());
 
@@ -1013,7 +1010,7 @@ try {
         mvo()("erc20_token_address", gold_evm_acc->address_0x())
         ("native_token_contract", gold_token_account_name)
         ("ingress_fee", "0.1000 GOLD")
-        ("egress_fee", make_asset(100))
+        ("egress_fee", make_asset(100, eos_token_symbol))
         ("erc20_precision", 18)
         ("override_impl_address", ""));
 
@@ -1021,31 +1018,43 @@ try {
     transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(100000, eos_token_symbol), evm2.address_0x().c_str());
     produce_block();
 
-    // refresh evm token address to transfer within EVM world (evm1->evm2), now evm2 has 1 GOLD
+    // refresh evm token address to transfer within EVM world (evm1->evm2), now evm2 has 1.234 GOLD
     evm_address = gold_evm_acc->address_0x();
-    transferERC20(evm1, *(evmc::from_hex<evmc::address>(evm2.address_0x())), (uint64_t)(1'000'000'000'000'000'000));
+    transferERC20(evm1, *(evmc::from_hex<evmc::address>(evm2.address_0x())), (uint64_t)(1'234'000'000'000'000'000));
         
     auto bal = balanceOf(evm2.address_0x().c_str());
-    BOOST_REQUIRE(bal == 1'000'000'000'000'000'000);
+    BOOST_REQUIRE(bal == 1'234'000'000'000'000'000);
 
-    evm_address = getSolidityContractAddress(1);// <- proxy contract address
+    std::string proxy_address = getSolidityContractAddress(1);// <- proxy contract address
+    evm_address = proxy_address;
     // refresh evm token address, using id 1 (proxy contract)
-    BOOST_REQUIRE(evm_address == "0x33b57dc70014fd7aa6e1ed3080eed2b619632b8e"); // <- proxy contract address
+    BOOST_REQUIRE(proxy_address == "0x33b57dc70014fd7aa6e1ed3080eed2b619632b8e");
+
+    // before calling bridge trnasfer, we need to approve the proxy contract as the spender
     approveERC20(*(evmc::from_hex<evmc::address>(gold_evm_acc->address_0x())),
                  evm2,
-                 *(evmc::from_hex<evmc::address>(evm_address)), // <- proxy contract address
+                 *(evmc::from_hex<evmc::address>(proxy_address)), // <- proxy contract address
                  (uint64_t)(1'000'000'000'000'000'000));
 
     auto addr_alice = silkworm::make_reserved_address("alice"_n.to_uint64_t());
-    bridgeTransferERC20(evm2, addr_alice, (uint64_t)700'000'000'000'000'000, "aaa", 100);
+
+    auto fee = egressFee();
+    // EVM -> native
+    bridgeTransferERC20(evm2, addr_alice, (uint64_t)700'000'000'000'000'000, "hello world", fee);
     produce_block();
 
     evm_address = gold_evm_acc->address_0x();
     bal = balanceOf(evm2.address_0x().c_str());
-    std::cout << (uint64_t)bal << std::endl;
-    BOOST_REQUIRE(bal == 300'000'000'000'000'000);
+    BOOST_REQUIRE(bal == 534'000'000'000'000'000);
 
     BOOST_REQUIRE(7000 == get_balance("alice"_n, gold_token_account_name, symbol::from_string("4,GOLD")).get_amount());
+
+    // native -> EVM, 0.2 GOLD (0.1 ingress fee)
+    transfer_token(gold_token_account_name, "alice"_n, erc20_account, make_asset(2000, symbol::from_string("4,GOLD")), evm2.address_0x().c_str());
+
+    evm_address = gold_evm_acc->address_0x();
+    bal = balanceOf(evm2.address_0x().c_str());
+    BOOST_REQUIRE(bal == 634'000'000'000'000'000);
 }
 FC_LOG_AND_RETHROW()
 
