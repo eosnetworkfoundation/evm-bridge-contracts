@@ -1055,6 +1055,51 @@ try {
     evm_address = gold_evm_acc->address_0x();
     bal = balanceOf(evm2.address_0x().c_str());
     BOOST_REQUIRE(bal == 634'000'000'000'000'000);
+
+    // set egress fee to 0.5 EOS
+    constexpr intx::uint256 minimum_natively_representable = intx::exp(10_u256, intx::uint256(18 - 4));
+    evm_address = proxy_address;
+    push_action(erc20_account, "setegressfee"_n, erc20_account, 
+        mvo()("token_contract", gold_token_account_name)("token_symbol_code", "GOLD")("egress_fee", make_asset(5000)));
+    BOOST_REQUIRE(5000 * minimum_natively_representable == egressFee());
+
+    // EVM -> native with old fee, should not work
+    evm_address = proxy_address;
+    bridgeTransferERC20(evm2, addr_alice, (uint64_t)100'000'000'000'000'000, "hello world", fee);
+    produce_block();
+
+    evm_address = gold_evm_acc->address_0x();
+    bal = balanceOf(evm2.address_0x().c_str());
+    BOOST_REQUIRE(bal == 634'000'000'000'000'000);
+
+    // EVM -> native with new fee, should work
+    evm_address = proxy_address;
+    fee = egressFee();
+    bridgeTransferERC20(evm2, addr_alice, (uint64_t)100'000'000'000'000'000, "hello world", fee);
+    produce_block();
+
+    evm_address = gold_evm_acc->address_0x();
+    bal = balanceOf(evm2.address_0x().c_str());
+    BOOST_REQUIRE(bal == 534'000'000'000'000'000);
+
+    // unregtoken
+    push_action(
+        erc20_account, "unregtoken"_n, erc20_account, mvo()("eos_contract_name", gold_token_account_name)("token_symbol_code", "GOLD"));
+    
+    // EOS->EVM not allowed after unregtoken
+    BOOST_REQUIRE_EXCEPTION(
+        transfer_token(gold_token_account_name, "alice"_n, erc20_account, make_asset(2000, symbol::from_string("4,GOLD")), evm2.address_0x().c_str()),
+        eosio_assert_message_exception, 
+        eosio_assert_message_is("received unregistered token"));
+
+    // EVM -> native not allowed
+    evm_address = proxy_address;
+    fee = egressFee();
+    BOOST_REQUIRE_EXCEPTION(
+        bridgeTransferERC20(evm2, addr_alice, (uint64_t)100'000'000'000'000'000, "hello world", fee),
+        eosio_assert_message_exception, 
+        eosio_assert_message_is("ERC-20 token not registerred"));
+
 }
 FC_LOG_AND_RETHROW()
 

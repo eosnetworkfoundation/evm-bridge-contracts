@@ -107,7 +107,7 @@ class [[eosio::contract]] erc20 : public contract {
         eosio::asset balance;  // total amount in EVM side, only valid for native->evm tokens
         eosio::asset fee_balance;
         uint8_t erc20_precision = 0;
-        eosio::binary_extension<bool> _is_evm_to_native{false};
+        eosio::binary_extension<bool> from_evm_to_native{false};
 
         uint64_t primary_key() const {
             return id;
@@ -122,11 +122,11 @@ class [[eosio::contract]] erc20 : public contract {
             return make_key(address);
         }
         bool is_evm_to_native() const {
-            if (_is_evm_to_native.has_value()) return _is_evm_to_native.value();
+            if (from_evm_to_native.has_value()) return from_evm_to_native.value();
             return false;
         }
 
-        EOSLIB_SERIALIZE(token_t, (id)(token_contract)(address)(ingress_fee)(balance)(fee_balance)(erc20_precision)(_is_evm_to_native));
+        EOSLIB_SERIALIZE(token_t, (id)(token_contract)(address)(ingress_fee)(balance)(fee_balance)(erc20_precision)(from_evm_to_native));
     };
     typedef eosio::multi_index<"tokens"_n, token_t,
                                indexed_by<"by.symbol"_n, const_mem_fun<token_t, uint128_t, &token_t::by_contract_symbol> >,
