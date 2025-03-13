@@ -217,7 +217,10 @@ class erc20_tester : public eosio::testing::base_tester {
              const uint32_t miner_cut = suggested_miner_cut,
              const std::optional<asset> ingress_bridge_fee = std::nullopt,
              const bool also_prepare_self_balance = true);
+    
+    void deploy_test_erc20_token(evm_eoa& from);
 
+    std::optional<evm_contract_account_t> getEVMAccountInfo(uint64_t primary_id);
 };
 
 
