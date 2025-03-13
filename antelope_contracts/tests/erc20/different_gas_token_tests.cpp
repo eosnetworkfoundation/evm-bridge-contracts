@@ -105,12 +105,12 @@ struct diff_gas_token_tester : erc20_tester {
         // init();
     }
 
-    std::string getSolidityContractAddress() {
-        auto r = getRegistedTokenInfo();
+    std::string getSolidityContractAddress(uint64_t primary_id = 0) {
+        auto r = getRegistedTokenInfo(primary_id);
         return vec_to_hex(r.address, true);
     }
 
-    token_t getRegistedTokenInfo() {
+    token_t getRegistedTokenInfo(uint64_t primary_id = 0) {
         auto& db = const_cast<chainbase::database&>(control->db());
 
         const auto* existing_tid = db.find<table_id_object, by_code_scope_table>(
@@ -119,12 +119,15 @@ struct diff_gas_token_tester : erc20_tester {
             return {};
         }
         const auto* kv_obj = db.find<chain::key_value_object, chain::by_scope_primary>(
-            boost::make_tuple(existing_tid->id, 0));
+            boost::make_tuple(existing_tid->id, primary_id));
 
-        auto r = fc::raw::unpack<token_t>(
-            kv_obj->value.data(),
-            kv_obj->value.size());
-        return r;
+        if (kv_obj) {
+            auto r = fc::raw::unpack<token_t>(
+                kv_obj->value.data(),
+                kv_obj->value.size());
+            return r;
+        } 
+        else return token_t();
     }
 
     intx::uint256 egressFee(std::optional<exec_callback> callback = {}, std::optional<bytes> context = {}) {
@@ -212,13 +215,33 @@ struct diff_gas_token_tester : erc20_tester {
         }
     }
 
-    void transferERC20(evm_eoa& from, evmc::address& to, intx::uint256 amount) {
+    void transferERC20(evm_eoa& from, const evmc::address& to, intx::uint256 amount) {
         auto target = evmc::from_hex<evmc::address>(evm_address);
 
         auto txn = generate_tx(*target, 0, 500'000);
         // transfer(address,uint256) = a9059cbb
         txn.data = evmc::from_hex("0xa9059cbb").value();
         txn.data += evmc::from_hex(address_str32(to)).value();      // param1 (to: address)
+        txn.data += evmc::from_hex(uint256_str32(amount)).value();  // param2 (amount: uint256)
+
+        auto old_nonce = from.next_nonce;
+        from.sign(txn);
+
+        try {
+            auto r = pushtx(txn);
+            // dlog("action trace: ${a}", ("a", r));
+        } catch (...) {
+            from.next_nonce = old_nonce;
+            throw;
+        }
+    }
+    
+    void approveERC20(evmc::address erc20_contract_addr, evm_eoa& from, const evmc::address& spender, intx::uint256 amount) {
+
+        auto txn = generate_tx(erc20_contract_addr, 0, 500'000);
+        // approve(address spender, uint amount) = 0x095ea7b3
+        txn.data = evmc::from_hex("0x095ea7b3").value();
+        txn.data += evmc::from_hex(address_str32(spender)).value(); // param1 (spender: address)
         txn.data += evmc::from_hex(uint256_str32(amount)).value();  // param2 (amount: uint256)
 
         auto old_nonce = from.next_nonce;
@@ -610,5 +633,152 @@ try {
 }
 FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE(it_evm2native_bridge, diff_gas_token_tester)
+try {
+    auto str_to_bytes = [](const char pri_key[65]) -> std::basic_string<uint8_t> {
+        std::basic_string<uint8_t> pri_key_bytes;
+        pri_key_bytes.resize(32, 0);
+        for (size_t i = 0; i < 32; ++i) {
+            uint8_t v = from_hex_digit(pri_key[i * 2]);
+            v <<= 4;
+            v += from_hex_digit(pri_key[i * 2 + 1]);
+            pri_key_bytes[i] = v;
+        }
+        return pri_key_bytes;
+    };
+
+    // address 0x5B38Da6a701c568545dCfcB03FcB875f56beddC4
+    evm_eoa evm1{str_to_bytes("503f38a9c967ed597e47fe25643985f032b072db8075426a92110f82df48dfcb")};
+    BOOST_REQUIRE(evm1.address_0x() == "0x5b38da6a701c568545dcfcb03fcb875f56beddc4");
+
+    // address 0xAb8483F64d9C6d1EcF9b849Ae677dD3315835cb2
+    evm_eoa evm2{str_to_bytes("7e5bfb82febc4c2c8529167104271ceec190eafdca277314912eaabdb67c6e5f")};
+
+    // track the number of evm account from evm runtime contract table
+    size_t evm_account_total = 0;
+    while (getEVMAccountInfo(evm_account_total).has_value()) ++evm_account_total;
+
+    // Give evm1 some BTC
+    transfer_token(btc_token_account, "alice"_n, btc_evm_account, make_asset(90'00000000, btc_symbol), evm1.address_0x().c_str());
+    produce_block();
+
+    size_t evm1_account_id = evm_account_total;
+    std::optional<evm_contract_account_t> acc = getEVMAccountInfo(evm1_account_id);
+    BOOST_REQUIRE(acc.has_value()); // evm1 account created
+    BOOST_REQUIRE(acc->address_0x() == "0x5b38da6a701c568545dcfcb03fcb875f56beddc4");
+
+    // evm1 deploy gold ERC-20 contract (calculated address 0xd9145cce52d386f254917e481eb44e9943f39138)
+    deploy_test_erc20_token(evm1);
+    produce_block();
+
+    // ensure deployment is ok
+    std::optional<evm_contract_account_t> gold_evm_acc = getEVMAccountInfo(evm1_account_id + 1);
+    BOOST_REQUIRE(gold_evm_acc.has_value()); // gold contract evm account created
+    BOOST_REQUIRE(gold_evm_acc->code_id.has_value());
+    BOOST_REQUIRE(gold_evm_acc->address_0x() == "0xd9145cce52d386f254917e481eb44e9943f39138");
+
+    // upgdevm2nat
+    push_action(erc20_account, "upgdevm2nat"_n, erc20_account, mvo());
+
+    // before token 1 registerred
+    BOOST_REQUIRE(getSolidityContractAddress(1) == "0x");
+
+    // regevm2nat
+    push_action(erc20_account, "regevm2nat"_n, erc20_account, 
+        mvo()("erc20_token_address", gold_evm_acc->address_0x())
+        ("native_token_contract", gold_token_account_name)
+        ("ingress_fee", "0.1000 GOLD")
+        ("egress_fee", "0.00000100 BTC")
+        ("erc20_precision", 18)
+        ("override_impl_address", ""));
+
+    // Give evm2 some BTC
+    transfer_token(btc_token_account, "alice"_n, btc_evm_account, make_asset(1'00000000, btc_symbol), evm2.address_0x().c_str());
+    produce_block();
+
+    // refresh evm token address to transfer within EVM world (evm1->evm2), now evm2 has 1.234 GOLD
+    evm_address = gold_evm_acc->address_0x();
+    transferERC20(evm1, *(evmc::from_hex<evmc::address>(evm2.address_0x())), (uint64_t)(1'234'000'000'000'000'000));
+        
+    auto bal = balanceOf(evm2.address_0x().c_str());
+    BOOST_REQUIRE(bal == 1'234'000'000'000'000'000);
+
+    std::string proxy_address = getSolidityContractAddress(1);// <- proxy contract address
+    evm_address = proxy_address;
+    // refresh evm token address, using id 1 (proxy contract)
+    BOOST_REQUIRE(proxy_address == "0x33b57dc70014fd7aa6e1ed3080eed2b619632b8e");
+
+    // before calling bridge trnasfer, we need to approve the proxy contract as the spender
+    approveERC20(*(evmc::from_hex<evmc::address>(gold_evm_acc->address_0x())),
+                 evm2,
+                 *(evmc::from_hex<evmc::address>(proxy_address)), // <- proxy contract address
+                 (uint64_t)(1'000'000'000'000'000'000));
+
+    auto addr_alice = silkworm::make_reserved_address("alice"_n.to_uint64_t());
+
+    auto fee = egressFee();
+    // EVM -> native
+    bridgeTransferERC20(evm2, addr_alice, (uint64_t)700'000'000'000'000'000, "hello world", fee);
+    produce_block();
+
+    evm_address = gold_evm_acc->address_0x();
+    bal = balanceOf(evm2.address_0x().c_str());
+    BOOST_REQUIRE(bal == 534'000'000'000'000'000);
+
+    BOOST_REQUIRE(7000 == get_balance("alice"_n, gold_token_account_name, symbol::from_string("4,GOLD")).get_amount());
+
+    // native -> EVM, 0.2 GOLD (0.1 ingress fee)
+    transfer_token(gold_token_account_name, "alice"_n, erc20_account, make_asset(2000, symbol::from_string("4,GOLD")), evm2.address_0x().c_str());
+
+    evm_address = gold_evm_acc->address_0x();
+    bal = balanceOf(evm2.address_0x().c_str());
+    BOOST_REQUIRE(bal == 634'000'000'000'000'000);
+
+    // set egress fee to 0.5 EOS
+    constexpr intx::uint256 minimum_natively_representable = intx::exp(10_u256, intx::uint256(18 - 8));
+    evm_address = proxy_address;
+    push_action(erc20_account, "setegressfee"_n, erc20_account, 
+        mvo()("token_contract", gold_token_account_name)("token_symbol_code", "GOLD")("egress_fee", "0.00000789 BTC"));
+    BOOST_REQUIRE(789 * minimum_natively_representable == egressFee());
+
+    // EVM -> native with old fee, should not work
+    evm_address = proxy_address;
+    bridgeTransferERC20(evm2, addr_alice, (uint64_t)100'000'000'000'000'000, "hello world", fee);
+    produce_block();
+
+    evm_address = gold_evm_acc->address_0x();
+    bal = balanceOf(evm2.address_0x().c_str());
+    BOOST_REQUIRE(bal == 634'000'000'000'000'000);
+
+    // EVM -> native with new fee, should work
+    evm_address = proxy_address;
+    fee = egressFee();
+    bridgeTransferERC20(evm2, addr_alice, (uint64_t)100'000'000'000'000'000, "hello world", fee);
+    produce_block();
+
+    evm_address = gold_evm_acc->address_0x();
+    bal = balanceOf(evm2.address_0x().c_str());
+    BOOST_REQUIRE(bal == 534'000'000'000'000'000);
+
+    // unregtoken
+    push_action(
+        erc20_account, "unregtoken"_n, erc20_account, mvo()("eos_contract_name", gold_token_account_name)("token_symbol_code", "GOLD"));
+    
+    // EOS->EVM not allowed after unregtoken
+    BOOST_REQUIRE_EXCEPTION(
+        transfer_token(gold_token_account_name, "alice"_n, erc20_account, make_asset(2000, symbol::from_string("4,GOLD")), evm2.address_0x().c_str()),
+        eosio_assert_message_exception, 
+        eosio_assert_message_is("received unregistered token"));
+
+    // EVM -> native not allowed
+    evm_address = proxy_address;
+    fee = egressFee();
+    BOOST_REQUIRE_EXCEPTION(
+        bridgeTransferERC20(evm2, addr_alice, (uint64_t)100'000'000'000'000'000, "hello world", fee),
+        eosio_assert_message_exception, 
+        eosio_assert_message_is("ERC-20 token not registerred"));
+
+}
+FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()
