@@ -10,7 +10,7 @@
 #include <silkworm/core/execution/address.hpp>
 #include <silkworm/core/common/util.hpp>
 
-// avoid solidity compiler generating emtpy bytecodes
+// avoid solidity compiler generating empty bytecode
 static_assert(sizeof(solidity::erc20::bytecode) >= 16);
 static_assert(sizeof(solidity::proxy::bytecode) >= 16);
 static_assert(sizeof(solidity::evm2native::bytecode) >= 16);
@@ -106,9 +106,7 @@ uint64_t erc20::get_next_nonce() {
 void erc20::upgrade() {
     require_auth(get_self());
 
-    uint64_t id = 0;
     impl_contract_table_t contract_table(_self, _self.value);
-    check(contract_table.find(id) == contract_table.end(), "implementation contract already deployed");
 
     bytes call_data;
 
@@ -141,7 +139,6 @@ void erc20::upgradeto(std::string impl_address) {
     eosio::check(!!address_bytes, "implementation address must be valid 0x EVM address");
     eosio::check(address_bytes->size() == kAddressLength, "invalid length of implementation address");
 
-    uint64_t id = 0;
     impl_contract_table_t contract_table(_self, _self.value);
 
     contract_table.emplace(_self, [&](auto &v) {
@@ -154,9 +151,7 @@ void erc20::upgradeto(std::string impl_address) {
 void erc20::upgdevm2nat() {
     require_auth(get_self());
 
-    uint64_t id = 0;
     evm2native_impl_table_t contract_table(_self, _self.value);
-    check(contract_table.find(id) == contract_table.end(), "evm2native implementation contract already deployed");
 
     bytes call_data;
 
