@@ -989,7 +989,9 @@ contract Evm2Native is Initializable, UUPSUpgradeable {
 
     function transfer(address to, uint256 host_amount) external returns (bool) {
         require(msg.sender == owner, "can only called from owner"); // eosio.erc2o
-        return token.transfer(to, host_amount * mult_factor);
+        bool success = token.transfer(to, host_amount * mult_factor);
+        if (!success) { revert(); }
+        return success;
     }
 
     function _isReservedAddress(address addr) internal pure returns (bool) {
