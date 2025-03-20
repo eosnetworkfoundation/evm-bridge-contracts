@@ -2,6 +2,7 @@
 
 #include <eosio/asset.hpp>
 #include <eosio/eosio.hpp>
+#include <eosio/binary_extension.hpp>
 #include <eosio/singleton.hpp>
 #include <erc20/types.hpp>
 #include <intx/intx.hpp>
@@ -49,6 +50,15 @@ class [[eosio::contract]] erc20 : public contract {
                                     std::string evm_token_name, std::string evm_token_symbol, 
                                     const eosio::asset &ingress_fee, const eosio::asset &egress_fee, uint8_t erc20_precision);
 
+
+    // deploy latest evm->native solidity bridge contract implementation
+    [[eosio::action]] void upgdevm2nat();
+    // register evm->native token bridge for a specific erc20 token
+    [[eosio::action]] void regevm2nat(std::string erc20_token_address, 
+                                      eosio::name native_token_contract,
+                                      const eosio::asset &ingress_fee, const eosio::asset &egress_fee,
+                                      uint8_t erc20_precision, std::string override_impl_address);
+
     [[eosio::action]] void regwithcode(eosio::name eos_contract_name,
                                         std::string impl_address,
                                     std::string evm_token_name, std::string evm_token_symbol, 
@@ -67,7 +77,7 @@ class [[eosio::contract]] erc20 : public contract {
     [[eosio::action]] void setgaslimit(std::optional<uint64_t> gaslimit, std::optional<uint64_t> init_gaslimit);
     [[eosio::action]] void callupgrade(eosio::name token_contract, eosio::symbol token_symbol);
     
-    struct [[eosio::table("implcontract")]] impl_contract_t {
+    struct [[eosio::table("implcontract")]] impl_contract_t { // native to evm 
         uint64_t id = 0;
         bytes address;
 
@@ -78,14 +88,26 @@ class [[eosio::contract]] erc20 : public contract {
     };
     typedef eosio::multi_index<"implcontract"_n, impl_contract_t> impl_contract_table_t;
 
+    struct [[eosio::table("evm2natiimpl")]] evm2native_impl_t { // evm to native
+        uint64_t id = 0;
+        bytes    address;
+        uint16_t version = 0;
+        uint64_t primary_key() const {
+            return id;
+        }
+        EOSLIB_SERIALIZE(evm2native_impl_t, (id)(address)(version));
+    };
+    typedef eosio::multi_index<"evm2natiimpl"_n, evm2native_impl_t> evm2native_impl_table_t;
+
     struct [[eosio::table("tokens")]] token_t {
         uint64_t id = 0;
         eosio::name token_contract;
         bytes address;  // <-- proxy contract addr
         eosio::asset ingress_fee;
-        eosio::asset balance;  // <-- total amount in EVM side
+        eosio::asset balance;  // total amount in EVM side, only valid for native->evm tokens
         eosio::asset fee_balance;
         uint8_t erc20_precision = 0;
+        eosio::binary_extension<bool> from_evm_to_native{false};
 
         uint64_t primary_key() const {
             return id;
@@ -99,8 +121,12 @@ class [[eosio::contract]] erc20 : public contract {
         checksum256 by_address() const {
             return make_key(address);
         }
+        bool is_evm_to_native() const {
+            if (from_evm_to_native.has_value()) return from_evm_to_native.value();
+            return false;
+        }
 
-        EOSLIB_SERIALIZE(token_t, (id)(token_contract)(address)(ingress_fee)(balance)(fee_balance)(erc20_precision));
+        EOSLIB_SERIALIZE(token_t, (id)(token_contract)(address)(ingress_fee)(balance)(fee_balance)(erc20_precision)(from_evm_to_native));
     };
     typedef eosio::multi_index<"tokens"_n, token_t,
                                indexed_by<"by.symbol"_n, const_mem_fun<token_t, uint128_t, &token_t::by_contract_symbol> >,

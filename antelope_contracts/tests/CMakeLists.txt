@@ -1,2 +1,2 @@
-find_package(leap REQUIRED)
+find_package(spring REQUIRED)
 add_subdirectory(erc20)

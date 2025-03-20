@@ -194,4 +194,4 @@ jobs:
       - name: EVM Bridge Contracts Tests
         run: |
           pushd evm-bridge-contracts/build
-          ctest --output-on-failure
+          ctest --output-on-failure --verbose
