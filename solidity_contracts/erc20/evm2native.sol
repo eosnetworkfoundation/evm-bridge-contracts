@@ -1006,6 +1006,9 @@ contract Evm2Native is Initializable, UUPSUpgradeable {
 
         uint256 host_amount = amount / mult_factor;
         uint256 bill_amount = host_amount * mult_factor;
+
+        require(amount == bill_amount, "bridgeTransfer can not have dust");
+        
         if (!token.transferFrom(msg.sender, address(this), bill_amount)) { 
             revert(); 
         }
