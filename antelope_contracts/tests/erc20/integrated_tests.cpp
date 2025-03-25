@@ -936,7 +936,15 @@ try {
     evm_address = gold_evm_acc->address_0x();
     bal = balanceOf(evm2.address_0x().c_str());
     BOOST_REQUIRE(bal == 534'000'000'000'000'000);
+    BOOST_REQUIRE(7000 == get_balance("alice"_n, gold_token_account_name, symbol::from_string("4,GOLD")).get_amount());
 
+    // EVM -> native (with dust) should not work
+    bridgeTransferERC20(evm2, addr_alice, (uint64_t)100'000'000'000'000'999, "hello world", fee);
+    produce_block();
+
+    evm_address = gold_evm_acc->address_0x();
+    bal = balanceOf(evm2.address_0x().c_str());
+    BOOST_REQUIRE(bal == 534'000'000'000'000'000); // same balance
     BOOST_REQUIRE(7000 == get_balance("alice"_n, gold_token_account_name, symbol::from_string("4,GOLD")).get_amount());
 
     // native -> EVM, 0.2 GOLD (0.1 ingress fee)
