@@ -930,7 +930,6 @@ contract Evm2Native is Initializable, UUPSUpgradeable {
     bool    public suspended;
     uint8   public evm_precision;
     uint8   public host_precision;
-    uint256 public mult_factor;
     uint256 public egressFee;
     address public evm_address; 
     IERC20  public token;
@@ -952,7 +951,6 @@ contract Evm2Native is Initializable, UUPSUpgradeable {
         egressFee = _egressFee;
         require(evm_precision >= host_precision, "invalid host_precision");
         require(evm_precision == _evm_precision, "invalid evm precision check");
-        mult_factor = 10**(evm_precision - host_precision);
     }
 
     function _addressToName(address input) internal pure returns (string memory) {
@@ -987,9 +985,9 @@ contract Evm2Native is Initializable, UUPSUpgradeable {
         if (msg.sender != owner) { revert(); }
     }
 
-    function transfer(address to, uint256 host_amount) external returns (bool) {
+    function transfer(address to, uint256 amount) external returns (bool) {
         require(msg.sender == owner, "can only called from owner"); // eosio.erc2o
-        bool success = token.transfer(to, host_amount * mult_factor);
+        bool success = token.transfer(to, amount);
         if (!success) { revert(); }
         return success;
     }
@@ -1002,20 +1000,15 @@ contract Evm2Native is Initializable, UUPSUpgradeable {
         require(suspended == false, "bridge suspended");
         require(msg.value == egressFee, "incorrect egress bridge fee");
         require(_isReservedAddress(to), "to address must be reserved address");
-        require(amount >= mult_factor, "amount too small");
+        require(amount > 0, "amount too small");
 
-        uint256 host_amount = amount / mult_factor;
-        uint256 bill_amount = host_amount * mult_factor;
-
-        require(amount == bill_amount, "bridgeTransfer can not have dust");
-        
-        if (!token.transferFrom(msg.sender, address(this), bill_amount)) { 
+        if (!token.transferFrom(msg.sender, address(this), amount)) { 
             revert(); 
         }
 
         // Call bridgeMessage of EVM Runtime
         // sha("bridgeTransferV0(address,uint256,string)") = 0x653332e5
-        bytes memory receiver_msg = abi.encodeWithSignature("bridgeTransferV0(address,uint256,string)", to, host_amount, memo);
+        bytes memory receiver_msg = abi.encodeWithSignature("bridgeTransferV0(address,uint256,string)", to, amount, memo);
         (bool success, ) = evm_address.call{value: msg.value}(abi.encodeWithSignature("bridgeMsgV0(string,bool,bytes)", linkedOwnerName, true, receiver_msg ));
         if(!success) { revert(); }
         return success;
