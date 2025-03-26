@@ -102,12 +102,13 @@ class [[eosio::contract]] erc20 : public contract {
     struct [[eosio::table("tokens")]] token_t {
         uint64_t id = 0;
         eosio::name token_contract;
-        bytes address;  // <-- proxy contract addr
+        bytes address;  // <-- portal contract addr
         eosio::asset ingress_fee;
         eosio::asset balance;  // total amount in EVM side, only valid for native->evm tokens
         eosio::asset fee_balance;
         uint8_t erc20_precision = 0;
         eosio::binary_extension<bool> from_evm_to_native{false};
+        eosio::binary_extension<bytes> original_erc20_token_address; // set if token is originated from EVM
 
         uint64_t primary_key() const {
             return id;
@@ -126,7 +127,7 @@ class [[eosio::contract]] erc20 : public contract {
             return false;
         }
 
-        EOSLIB_SERIALIZE(token_t, (id)(token_contract)(address)(ingress_fee)(balance)(fee_balance)(erc20_precision)(from_evm_to_native));
+        EOSLIB_SERIALIZE(token_t, (id)(token_contract)(address)(ingress_fee)(balance)(fee_balance)(erc20_precision)(from_evm_to_native)(original_erc20_token_address));
     };
     typedef eosio::multi_index<"tokens"_n, token_t,
                                indexed_by<"by.symbol"_n, const_mem_fun<token_t, uint128_t, &token_t::by_contract_symbol> >,
@@ -168,7 +169,6 @@ class [[eosio::contract]] erc20 : public contract {
 
     uint64_t get_next_nonce();
     void handle_erc20_transfer(const token_t &token, eosio::asset quantity, const std::string &memo);
-    void handle_call_upgrade(const bytes& proxy_address);
 
 private:
 void regtokenwithcodebytes(eosio::name token_contract,  const bytes& address_bytes, std::string evm_token_name, std::string evm_token_symbol, const eosio::asset& ingress_fee, const eosio::asset &egress_fee, uint8_t erc20_precision);

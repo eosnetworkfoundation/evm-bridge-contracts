@@ -341,6 +341,7 @@ void erc20::regevm2nat(std::string erc20_token_address,
         v.fee_balance = v.balance;
         v.erc20_precision = erc20_precision;
         v.from_evm_to_native = true;
+        v.original_erc20_token_address = *erc20_address_bytes;
     });
 }
 
@@ -409,11 +410,9 @@ void erc20::onbridgemsg(const bridge_message_t &message) {
 
         intx::uint256 value = read_uint256(msg, 4 + 32);
 
-        if (itr->is_evm_to_native() == false) {
-            intx::uint256 mult = intx::exp(10_u256, intx::uint256(itr->erc20_precision - itr->ingress_fee.symbol.precision()));
-            check(value % mult == 0_u256, "bridge amount can not have dust");
-            value /= mult;
-        }
+        intx::uint256 mult = intx::exp(10_u256, intx::uint256(itr->erc20_precision - itr->ingress_fee.symbol.precision()));
+        check(value % mult == 0_u256, "bridge amount can not have dust");
+        value /= mult;
 
         uint64_t dest_amount = (uint64_t)value;
         check(intx::uint256(dest_amount) == value && dest_amount < (1ull<<62)-1, "bridge amount value overflow");
@@ -489,9 +488,7 @@ void erc20::handle_erc20_transfer(const token_t &token, eosio::asset quantity, c
 
     intx::uint256 value((uint64_t)quantity.amount);
 
-    if (token.is_evm_to_native() == false) {
-        value *= intx::exp(10_u256, intx::uint256(token.erc20_precision - quantity.symbol.precision()));
-    }
+    value *= intx::exp(10_u256, intx::uint256(token.erc20_precision - quantity.symbol.precision()));
 
     uint8_t value_buffer[32] = {};
     intx::be::store(value_buffer, value);
@@ -660,39 +657,45 @@ void erc20::callupgrade(eosio::name token_contract, eosio::symbol token_symbol){
     auto token_table_iter = index_symbol.find(token_symbol_key(token_contract, token_symbol.code()));
     eosio::check(token_table_iter != index_symbol.end(), "token not registered");
     
-    handle_call_upgrade(token_table_iter->address);
-}
+    auto handle_call_upgrade = [&](const bytes& proxy_address, auto &contract_table) {
+        config_t config = get_config();
 
-void erc20::handle_call_upgrade(const bytes& proxy_address) {
-    config_t config = get_config();
-    impl_contract_table_t contract_table(_self, _self.value);
-    eosio::check(contract_table.begin() != contract_table.end(), "no implementaion contract available");
-    auto contract_itr = contract_table.end();
-    --contract_itr;
- 
-    auto pack_uint32 = [&](bytes &ds, uint32_t val) {
-        uint8_t val_[32] = {};
-        val_[28] = (uint8_t)(val >> 24);
-        val_[29] = (uint8_t)(val >> 16);
-        val_[30] = (uint8_t)(val >> 8);
-        val_[31] = (uint8_t)val;
-        ds.insert(ds.end(), val_, val_ + sizeof(val_));
+        eosio::check(contract_table.begin() != contract_table.end(), "no implementaion contract available");
+        auto contract_itr = contract_table.end();
+        --contract_itr;
+     
+        auto pack_uint32 = [&](bytes &ds, uint32_t val) {
+            uint8_t val_[32] = {};
+            val_[28] = (uint8_t)(val >> 24);
+            val_[29] = (uint8_t)(val >> 16);
+            val_[30] = (uint8_t)(val >> 8);
+            val_[31] = (uint8_t)val;
+            ds.insert(ds.end(), val_, val_ + sizeof(val_));
+        };
+    
+        bytes call_data;
+        // sha(upgradeTo(address)) == 3659cfe6
+        uint8_t func_[4] = {0x36,0x59,0xcf,0xe6};
+        call_data.insert(call_data.end(), func_, func_ + sizeof(func_));
+        
+        
+        call_data.insert(call_data.end(), 32 - kAddressLength, 0);  // padding for address offset 0
+        call_data.insert(call_data.end(), contract_itr->address.begin(), contract_itr->address.end()); 
+    
+        bytes value_zero; 
+        value_zero.resize(32, 0);
+    
+        evm_runtime::call_action call_act(config.evm_account, {{receiver_account(), "active"_n}});
+        call_act.send(receiver_account(), proxy_address, value_zero, call_data, config.evm_gaslimit);
     };
 
-    bytes call_data;
-    // sha(upgradeTo(address)) == 3659cfe6
-    uint8_t func_[4] = {0x36,0x59,0xcf,0xe6};
-    call_data.insert(call_data.end(), func_, func_ + sizeof(func_));
-    
-    
-    call_data.insert(call_data.end(), 32 - kAddressLength, 0);  // padding for address offset 0
-    call_data.insert(call_data.end(), contract_itr->address.begin(), contract_itr->address.end()); 
-
-    bytes value_zero; 
-    value_zero.resize(32, 0);
-
-    evm_runtime::call_action call_act(config.evm_account, {{receiver_account(), "active"_n}});
-    call_act.send(receiver_account(), proxy_address, value_zero, call_data, config.evm_gaslimit);
+    if (token_table_iter->is_evm_to_native()) {
+        evm2native_impl_table_t contract_table(_self, _self.value);
+        handle_call_upgrade(token_table_iter->address, contract_table);
+    } else {    
+        impl_contract_table_t contract_table(_self, _self.value);
+        handle_call_upgrade(token_table_iter->address, contract_table);
+    }
 }
 
 }  // namespace erc20
