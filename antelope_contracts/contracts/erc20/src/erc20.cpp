@@ -341,6 +341,7 @@ void erc20::regevm2nat(std::string erc20_token_address,
         v.fee_balance = v.balance;
         v.erc20_precision = erc20_precision;
         v.from_evm_to_native = true;
+        v.original_erc20_token_address = *erc20_address_bytes;
     });
 }
 
