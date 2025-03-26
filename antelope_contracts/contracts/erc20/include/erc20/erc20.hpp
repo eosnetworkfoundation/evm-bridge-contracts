@@ -127,7 +127,7 @@ class [[eosio::contract]] erc20 : public contract {
             return false;
         }
 
-        EOSLIB_SERIALIZE(token_t, (id)(token_contract)(address)(ingress_fee)(balance)(fee_balance)(erc20_precision)(from_evm_to_native));
+        EOSLIB_SERIALIZE(token_t, (id)(token_contract)(address)(ingress_fee)(balance)(fee_balance)(erc20_precision)(from_evm_to_native)(original_erc20_token_address));
     };
     typedef eosio::multi_index<"tokens"_n, token_t,
                                indexed_by<"by.symbol"_n, const_mem_fun<token_t, uint128_t, &token_t::by_contract_symbol> >,
