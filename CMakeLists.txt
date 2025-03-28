@@ -8,7 +8,7 @@ endif()
 set(EXTERNAL_DIR ${CMAKE_SOURCE_DIR}/external)
 set(SOLIDITY_BYTECODES_DIR ${CMAKE_BINARY_DIR}/solidity_contracts/bytecodes)
 
-add_compile_definitions(PROJECT_VERSION="0.2.0")
+add_compile_definitions(PROJECT_VERSION="1.0.0-rc1")
 
 add_subdirectory (solidity_contracts)
 
