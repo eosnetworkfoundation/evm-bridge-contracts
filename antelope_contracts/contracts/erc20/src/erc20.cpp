@@ -5,9 +5,15 @@
 
 #include <erc20/bytecode.hpp>
 #include <erc20/proxy_bytecode.hpp>
+#include <erc20/evm2native_bytecode.hpp>
 
 #include <silkworm/core/execution/address.hpp>
 #include <silkworm/core/common/util.hpp>
+
+// avoid solidity compiler generating empty bytecode
+static_assert(sizeof(solidity::erc20::bytecode) >= 16);
+static_assert(sizeof(solidity::proxy::bytecode) >= 16);
+static_assert(sizeof(solidity::evm2native::bytecode) >= 16);
 
 namespace eosio {
    namespace internal_use_do_not_use {
@@ -44,6 +50,45 @@ void initialize_data(bytes& output, const unsigned char (&arr)[Size]) {
     std::memcpy(output.data(), arr, Size);
 }
 
+void pack_address(bytes &ds, const evmc::address &address) {
+    ds.insert(ds.end(),  32 - kAddressLength, 0);  // padding for address
+    ds.insert(ds.end(), address.bytes, address.bytes + kAddressLength);
+}
+void pack_address(bytes &ds, const bytes &address) {
+    ds.insert(ds.end(),  32 - kAddressLength, 0);  // padding for address
+    ds.insert(ds.end(), address.begin(), address.end());
+}
+void pack_address(bytes &ds, const std::optional<bytes> &address) {
+    if (address.has_value()) {
+        pack_address(ds, *address); 
+    } else {
+        ds.insert(ds.end(), 32, 0);
+    }
+}
+void pack_uint32(bytes &ds, uint32_t val) {
+    uint8_t val_[32] = {};
+    val_[28] = (uint8_t)(val >> 24);
+    val_[29] = (uint8_t)(val >> 16);
+    val_[30] = (uint8_t)(val >> 8);
+    val_[31] = (uint8_t)val;
+    ds.insert(ds.end(), val_, val_ + sizeof(val_));
+}
+void pack_uint256(bytes &ds, const intx::uint256 &val) {
+    uint8_t val_[32] = {};
+    intx::be::store(val_, val);
+    ds.insert(ds.end(), val_, val_ + sizeof(val_));
+}
+template<typename S>
+void pack_string(bytes &ds, const S &str) {
+    pack_uint32(ds, (uint32_t)str.size());
+    for (size_t i = 0; i < (str.size() + 31) / 32 * 32; i += 32) {
+        uint8_t name_[32] = {};
+        memcpy(name_, str.data() + i, i + 32 > str.size() ? str.size() - i : 32);
+        ds.insert(ds.end(), name_, name_ + sizeof(name_));
+    }
+}
+
+
 // lookup nonce from the multi_index table of evm contract and assert
 uint64_t erc20::get_next_nonce() { 
 
@@ -61,9 +106,7 @@ uint64_t erc20::get_next_nonce() {
 void erc20::upgrade() {
     require_auth(get_self());
 
-    uint64_t id = 0;
     impl_contract_table_t contract_table(_self, _self.value);
-    check(contract_table.find(id) == contract_table.end(), "implementation contract already deployed");
 
     bytes call_data;
 
@@ -84,7 +127,7 @@ void erc20::upgrade() {
     evmc::address impl_addr = silkworm::create_address(reserved_addr, next_nonce); 
 
     contract_table.emplace(_self, [&](auto &v) {
-        v.id = id;
+        v.id = contract_table.available_primary_key();
         v.address.resize(kAddressLength);
         memcpy(&(v.address[0]), impl_addr.bytes, kAddressLength);
     });
@@ -96,13 +139,42 @@ void erc20::upgradeto(std::string impl_address) {
     eosio::check(!!address_bytes, "implementation address must be valid 0x EVM address");
     eosio::check(address_bytes->size() == kAddressLength, "invalid length of implementation address");
 
-    uint64_t id = 0;
     impl_contract_table_t contract_table(_self, _self.value);
 
     contract_table.emplace(_self, [&](auto &v) {
         v.id = contract_table.available_primary_key();
         v.address.resize(kAddressLength);
         memcpy(&(v.address[0]), address_bytes->data(), kAddressLength);
+    });
+}
+
+void erc20::upgdevm2nat() {
+    require_auth(get_self());
+
+    evm2native_impl_table_t contract_table(_self, _self.value);
+
+    bytes call_data;
+
+    auto reserved_addr = silkworm::make_reserved_address(receiver_account().value);
+    initialize_data(call_data, solidity::evm2native::bytecode);
+
+    bytes to = {};
+    bytes value_zero; 
+    value_zero.resize(32, 0);
+
+    uint64_t next_nonce = get_next_nonce();
+
+    // required account opened in evm_runtime
+    config_t config = get_config();
+    evm_runtime::call_action call_act(config.evm_account, {{receiver_account(), "active"_n}});
+    call_act.send(receiver_account(), to, value_zero, call_data, config.evm_init_gaslimit);
+
+    evmc::address impl_addr = silkworm::create_address(reserved_addr, next_nonce); 
+
+    contract_table.emplace(_self, [&](auto &v) {
+        v.id = contract_table.available_primary_key();
+        v.address.resize(kAddressLength);
+        memcpy(&(v.address[0]), impl_addr.bytes, kAddressLength);
     });
 }
 
@@ -123,7 +195,7 @@ void erc20::regtokenwithcodebytes(eosio::name token_contract, const bytes& addre
     eosio::check(erc20_precision >= ingress_fee.symbol.precision() &&
     erc20_precision <= ingress_fee.symbol.precision() + 57, "erc20 precision out of range");
 
-    eosio::check(egress_fee.symbol == config.evm_gas_token_symbol, "egress_fee should have native token symbol");
+    eosio::check(egress_fee.symbol == config.evm_gas_token_symbol, "egress_fee should have gas token symbol");
     intx::uint256 egress_fee_evm = egress_fee.amount;
     egress_fee_evm *= get_minimum_natively_representable(config);
 
@@ -144,28 +216,6 @@ void erc20::regtokenwithcodebytes(eosio::name token_contract, const bytes& addre
     // initialize(address,address,uint8,uint256,string,string,string) == 0x1fa01e36
     uint8_t func_[4] = {0x1f,0xa0,0x1e,0x36};
     constructor_data.insert(constructor_data.end(), func_, func_ + sizeof(func_));
-
-    auto pack_uint256 = [&](bytes &ds, const intx::uint256 &val) {
-        uint8_t val_[32] = {};
-        intx::be::store(val_, val);
-        ds.insert(ds.end(), val_, val_ + sizeof(val_));
-    };
-    auto pack_uint32 = [&](bytes &ds, uint32_t val) {
-        uint8_t val_[32] = {};
-        val_[28] = (uint8_t)(val >> 24);
-        val_[29] = (uint8_t)(val >> 16);
-        val_[30] = (uint8_t)(val >> 8);
-        val_[31] = (uint8_t)val;
-        ds.insert(ds.end(), val_, val_ + sizeof(val_));
-    };
-    auto pack_string = [&](bytes &ds, const auto &str) {
-        pack_uint32(ds, (uint32_t)str.size());
-        for (size_t i = 0; i < (str.size() + 31) / 32 * 32; i += 32) {
-            uint8_t name_[32] = {};
-            memcpy(name_, str.data() + i, i + 32 > str.size() ? str.size() - i : 32);
-            ds.insert(ds.end(), name_, name_ + sizeof(name_));
-        }
-    };
 
     constructor_data.insert(constructor_data.end(), 32 - kAddressLength, 0);  // padding for address, offset 0
     constructor_data.insert(constructor_data.end(), reserved_addr.bytes, reserved_addr.bytes + kAddressLength); 
@@ -205,6 +255,93 @@ void erc20::regtokenwithcodebytes(eosio::name token_contract, const bytes& addre
         v.balance.amount = 0;
         v.fee_balance = v.balance;
         v.erc20_precision = erc20_precision;
+    });
+}
+
+void erc20::regevm2nat(std::string erc20_token_address, 
+                       eosio::name native_token_contract,
+                       const eosio::asset &ingress_fee, 
+                       const eosio::asset &egress_fee, 
+                       uint8_t erc20_precision, 
+                       std::string override_impl_address) {
+    require_auth(get_self());
+    config_t config = get_config();
+
+    auto erc20_address_bytes = from_hex(erc20_token_address);
+    eosio::check(!!erc20_address_bytes, "erc20_token_address must be valid 0x EVM address");
+    eosio::check(erc20_address_bytes->size() == kAddressLength, "invalid length of erc20_token_address");
+
+    eosio::check(eosio::is_account(native_token_contract), "invalid native_token_contract");
+    
+    // 2^(256-64) = 6.2e+57, so the precision diff is at most 57
+    eosio::check(erc20_precision >= ingress_fee.symbol.precision() &&
+    erc20_precision <= ingress_fee.symbol.precision() + 57, "erc20 precision out of range");
+
+    eosio::check(egress_fee.symbol == config.evm_gas_token_symbol, "egress_fee should have gas token symbol");
+    intx::uint256 egress_fee_evm = egress_fee.amount;
+    egress_fee_evm *= get_minimum_natively_representable(config);
+
+    token_table_t token_table(_self, _self.value);
+    auto index_symbol = token_table.get_index<"by.symbol"_n>();
+    check(index_symbol.find(token_symbol_key(native_token_contract, ingress_fee.symbol.code())) == index_symbol.end(), "token already registered");
+
+    auto reserved_addr = silkworm::make_reserved_address(receiver_account().value);
+    auto evm_reserved_addr = silkworm::make_reserved_address(config.evm_account.value);
+    bytes call_data;
+    initialize_data(call_data, solidity::proxy::bytecode);
+
+    // constructor(address impl_contract, memory _data)
+    if (override_impl_address.size() == 0) {
+        evm2native_impl_table_t contract_table(_self, _self.value);
+        eosio::check(contract_table.begin() != contract_table.end(), "no evm2native implementaion contract available");
+        auto contract_itr = contract_table.end();
+        --contract_itr;
+        pack_address(call_data, contract_itr->address);
+    } else {
+        auto impl_address_bytes = from_hex(override_impl_address);
+        eosio::check(!!impl_address_bytes, "override_impl_address must be valid 0x EVM address");
+        eosio::check(impl_address_bytes->size() == kAddressLength, "invalid length of override_impl_address");
+        pack_address(call_data, impl_address_bytes);
+    }
+
+    bytes constructor_data;
+    // initialize(address _evm_address, address _token_address, uint8 _host_precision, uint8 _evm_precision, uint256 _egressFee) == 0xcff359b3
+    uint8_t func_[4] = {0xcf,0xf3,0x59,0xb3};
+    constructor_data.insert(constructor_data.end(), func_, func_ + sizeof(func_));
+
+    pack_address(constructor_data, evm_reserved_addr);
+    pack_address(constructor_data, erc20_address_bytes);
+    pack_uint32(constructor_data, ingress_fee.symbol.precision());
+    pack_uint32(constructor_data, erc20_precision);
+    pack_uint256(constructor_data, egress_fee_evm);
+
+    pack_uint32(call_data, 64);                  // offset 32
+    pack_string(call_data, constructor_data);    // offset 64
+
+    bytes to = {};
+    bytes value_zero; 
+    value_zero.resize(32, 0);
+
+    uint64_t next_nonce = get_next_nonce();
+
+    // required account opened in evm_runtime
+    evm_runtime::call_action call_act(config.evm_account, {{receiver_account(), "active"_n}});
+    call_act.send(receiver_account(), to, value_zero, call_data, config.evm_init_gaslimit);
+
+    evmc::address proxy_contract_addr = silkworm::create_address(reserved_addr, next_nonce); 
+
+    token_table.emplace(_self, [&](auto &v) {
+        v.id = token_table.available_primary_key();
+        v.token_contract = native_token_contract;
+        v.address.resize(kAddressLength, 0);
+        memcpy(&(v.address[0]), proxy_contract_addr.bytes, kAddressLength);
+        v.ingress_fee = ingress_fee;
+        v.balance = ingress_fee;
+        v.balance.amount = 0;
+        v.fee_balance = v.balance;
+        v.erc20_precision = erc20_precision;
+        v.from_evm_to_native = true;
+        v.original_erc20_token_address = *erc20_address_bytes;
     });
 }
 
@@ -272,6 +409,7 @@ void erc20::onbridgemsg(const bridge_message_t &message) {
         check(!!dest_acc, "destination address in bridge_message_v0 must be reserved address");
 
         intx::uint256 value = read_uint256(msg, 4 + 32);
+
         intx::uint256 mult = intx::exp(10_u256, intx::uint256(itr->erc20_precision - itr->ingress_fee.symbol.precision()));
         check(value % mult == 0_u256, "bridge amount can not have dust");
         value /= mult;
@@ -299,9 +437,11 @@ void erc20::onbridgemsg(const bridge_message_t &message) {
         eosio::token::transfer_action transfer_act(itr->token_contract, {{get_self(), "active"_n}});
         transfer_act.send(get_self(), dest_eos_acct, eosio::asset(dest_amount, itr->ingress_fee.symbol), memo);
 
-        token_table.modify(*itr, _self, [&](auto &v) {
-            v.balance.amount -= dest_amount;
-        });
+        if (itr->is_evm_to_native() == false) {
+            token_table.modify(*itr, _self, [&](auto &v) {
+                v.balance.amount -= dest_amount;
+            });
+        }
     } else {
         eosio::check(false, "unsupported bridge_message version");
     }
@@ -311,6 +451,11 @@ void erc20::transfer(eosio::name from, eosio::name to, eosio::asset quantity,
                      std::string memo) {
 
     if (to != get_self() || from == get_self()) return;
+
+    if (memo == get_self().to_string()) { 
+        // if memo is itself, it is considerred the token is given to the contract. (no bridge ops)
+        return;
+    }
 
     token_table_t token_table(_self, _self.value);
     auto index = token_table.get_index<"by.symbol"_n>();
@@ -325,7 +470,9 @@ void erc20::transfer(eosio::name from, eosio::name to, eosio::asset quantity,
     if (memo.size() == 42 && memo[0] == '0' && memo[1] == 'x') {
         handle_erc20_transfer(*itr, quantity, memo);
         token_table.modify(*itr, _self, [&](auto &v) {
-            v.balance += quantity;
+            if (v.is_evm_to_native() == false) {
+                v.balance += quantity;
+            }
             v.fee_balance += v.ingress_fee; 
         });
     } else
@@ -340,6 +487,7 @@ void erc20::handle_erc20_transfer(const token_t &token, eosio::asset quantity, c
     eosio::check(address_bytes->size() == kAddressLength, "memo must be valid 0x EVM address");
 
     intx::uint256 value((uint64_t)quantity.amount);
+
     value *= intx::exp(10_u256, intx::uint256(token.erc20_precision - quantity.symbol.precision()));
 
     uint8_t value_buffer[32] = {};
@@ -423,7 +571,7 @@ void erc20::setegressfee(eosio::name token_contract, eosio::symbol_code token_sy
 
     config_t config = get_config();
 
-    eosio::check(egress_fee.symbol == config.evm_gas_token_symbol, "egress_fee should have native token symbol");
+    eosio::check(egress_fee.symbol == config.evm_gas_token_symbol, "egress_fee should have gas token symbol");
 
     token_table_t token_table(_self, _self.value);
     auto index_symbol = token_table.get_index<"by.symbol"_n>();
@@ -499,6 +647,55 @@ void erc20::setgaslimit(std::optional<uint64_t> gaslimit, std::optional<uint64_t
 
 inline eosio::name erc20::receiver_account()const {
     return get_self();
+}
+
+void erc20::callupgrade(eosio::name token_contract, eosio::symbol token_symbol){
+    require_auth(get_self());
+
+    token_table_t token_table(_self, _self.value);
+    auto index_symbol = token_table.get_index<"by.symbol"_n>();
+    auto token_table_iter = index_symbol.find(token_symbol_key(token_contract, token_symbol.code()));
+    eosio::check(token_table_iter != index_symbol.end(), "token not registered");
+    
+    auto handle_call_upgrade = [&](const bytes& proxy_address, auto &contract_table) {
+        config_t config = get_config();
+
+        eosio::check(contract_table.begin() != contract_table.end(), "no implementaion contract available");
+        auto contract_itr = contract_table.end();
+        --contract_itr;
+     
+        auto pack_uint32 = [&](bytes &ds, uint32_t val) {
+            uint8_t val_[32] = {};
+            val_[28] = (uint8_t)(val >> 24);
+            val_[29] = (uint8_t)(val >> 16);
+            val_[30] = (uint8_t)(val >> 8);
+            val_[31] = (uint8_t)val;
+            ds.insert(ds.end(), val_, val_ + sizeof(val_));
+        };
+    
+        bytes call_data;
+        // sha(upgradeTo(address)) == 3659cfe6
+        uint8_t func_[4] = {0x36,0x59,0xcf,0xe6};
+        call_data.insert(call_data.end(), func_, func_ + sizeof(func_));
+        
+        
+        call_data.insert(call_data.end(), 32 - kAddressLength, 0);  // padding for address offset 0
+        call_data.insert(call_data.end(), contract_itr->address.begin(), contract_itr->address.end()); 
+    
+        bytes value_zero; 
+        value_zero.resize(32, 0);
+    
+        evm_runtime::call_action call_act(config.evm_account, {{receiver_account(), "active"_n}});
+        call_act.send(receiver_account(), proxy_address, value_zero, call_data, config.evm_gaslimit);
+    };
+
+    if (token_table_iter->is_evm_to_native()) {
+        evm2native_impl_table_t contract_table(_self, _self.value);
+        handle_call_upgrade(token_table_iter->address, contract_table);
+    } else {    
+        impl_contract_table_t contract_table(_self, _self.value);
+        handle_call_upgrade(token_table_iter->address, contract_table);
+    }
 }
 
 }  // namespace erc20

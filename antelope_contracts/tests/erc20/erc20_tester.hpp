@@ -72,12 +72,31 @@ struct token_t {
 
     };
 
+struct evm_contract_account_t {
+    uint64_t    id;
+    bytes       eth_address;
+    uint64_t    nonce;
+    bytes       balance;
+    std::optional<uint64_t> code_id;
+    
+    std::string address_0x() const {
+        std::string s = "0x";
+        for (size_t i = 0; i < eth_address.size(); i++) {
+            uint8_t v = eth_address[i];
+            s += "0123456789abcdef"[(v >> 4) & 0xf];
+            s += "0123456789abcdef"[v & 0xf];
+        }
+        return s;
+    }
+};
+
 } // namespace erc20_test
 
 FC_REFLECT(erc20_test::exec_input, (context)(from)(to)(data)(value))
 FC_REFLECT(erc20_test::exec_callback, (contract)(action))
 FC_REFLECT(erc20_test::exec_output, (status)(data)(context))
 FC_REFLECT(erc20_test::token_t, (id)(token_contract)(address)(ingress_fee)(balance)(fee_balance)(erc20_precision))
+FC_REFLECT(erc20_test::evm_contract_account_t, (id)(eth_address)(nonce)(balance)(code_id))
 
 namespace erc20_test {
 extern const eosio::chain::symbol eos_token_symbol;
@@ -125,15 +144,15 @@ class erc20_tester : public eosio::testing::base_tester {
    using testing::base_tester::push_action;
 
    static constexpr eosio::chain::name token_account = "tethertether"_n;
-    
+   static constexpr eosio::chain::name gold_token_account_name = "goldgoldgold"_n; // testing evm->native bridge
    static constexpr eosio::chain::name faucet_account_name = "eosio.faucet"_n;
    static constexpr eosio::chain::name erc20_account = "eosio.erc2o"_n;
    static constexpr eosio::chain::name eos_system_account = "eosio"_n;
-   static constexpr eosio::chain::name eos_token_account = "eosio.token"_n;
+   const eosio::chain::name eos_token_account;
 
-    const eosio::chain::name evm_account = "eosio.evm"_n;
+    const eosio::chain::name evm_account;
     const eosio::chain::symbol native_symbol;
-    explicit erc20_tester(bool use_real_evm = false, eosio::chain::name evm_account_ = "eosio.evm"_n, std::string native_symbol_str = "4,EOS");
+    explicit erc20_tester(bool use_real_evm = false, eosio::chain::name evm_account_ = "eosio.evm"_n, std::string native_symbol_str = "4,EOS", eosio::chain::name eos_token_account_ = "eosio.token"_n);
 
     unsigned int exec_count = 0; // ensure uniqueness in exec
 
@@ -143,7 +162,7 @@ class erc20_tester : public eosio::testing::base_tester {
     eosio::chain::asset make_asset(int64_t amount, const eosio::chain::symbol& target_symbol) const { return eosio::chain::asset(amount, target_symbol); }
     eosio::chain::transaction_trace_ptr transfer_token(eosio::chain::name token_account_name, eosio::chain::name from, eosio::chain::name to, eosio::chain::asset quantity, std::string memo = "");
     void prepare_self_balance(uint64_t fund_amount = 100'0000);
-    transaction_trace_ptr bridgereg(eosio::chain::name receiver, eosio::chain::name handler, eosio::chain::asset min_fee, vector<account_name> extra_signers={"eosio.evm"_n});
+    transaction_trace_ptr bridgereg(eosio::chain::name receiver, eosio::chain::name handler, eosio::chain::asset min_fee, vector<account_name> extra_signers={ ""_n /* default value replaced with evm_account*/});
     void open(name owner);
     transaction_trace_ptr exec(const exec_input& input, const std::optional<exec_callback>& callback);
     eosio::chain::action get_action( account_name code, action_name acttype, std::vector<permission_level> auths,
@@ -198,7 +217,10 @@ class erc20_tester : public eosio::testing::base_tester {
              const uint32_t miner_cut = suggested_miner_cut,
              const std::optional<asset> ingress_bridge_fee = std::nullopt,
              const bool also_prepare_self_balance = true);
+    
+    void deploy_test_erc20_token(evm_eoa& from);
 
+    std::optional<evm_contract_account_t> getEVMAccountInfo(uint64_t primary_id);
 };
 
 

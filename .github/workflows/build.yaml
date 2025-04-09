@@ -193,5 +193,5 @@ jobs:
 
       - name: EVM Bridge Contracts Tests
         run: |
-          pushd exsat-evm-bridge-contracts/build
-          ctest --output-on-failure
+          pushd evm-bridge-contracts/build
+          ctest --output-on-failure --verbose
