@@ -1559,7 +1559,10 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
         // ignore mint and burn
         if (from == address(0) || to == address(0)) return;
         // Only bridgeTransfer can trigger bridge transfer
-        if (msg.sig == this.bridgeTransfer.selector && _isReservedAddress(to)) {
+        if (msg.sig == this.bridgeTransfer.selector) {
+            // We can check this earlier to save some cpu/gas in reverting calls.
+            // But check it here will make code more clear.
+            require(_isReservedAddress(to), "cannot bridgeTransfer to non reseved address");
             require(msg.value == egressFee, "incorrect egress bridge fee");
             // Call bridgeMessage of EVM Runtime
             // sha("bridgeTransferV0(address,uint256,string)") = 0x653332e5

@@ -196,7 +196,7 @@ struct it_tester : erc20_tester {
         return result;
     }
 
-    void bridgeTransferERC20(evm_eoa& from, evmc::address& to, intx::uint256 amount, std::string memo, intx::uint256 egressfee) {
+    void bridgeTransferERC20(evm_eoa& from, const evmc::address& to, intx::uint256 amount, const std::string& memo, intx::uint256 egressfee) {
         auto target = evmc::from_hex<evmc::address>(evm_address);
         auto txn = generate_tx(*target, egressfee, 500'000);
         // bridgeTransfer(address,uint256,string) = 73761828
@@ -658,6 +658,7 @@ FC_LOG_AND_RETHROW()
 BOOST_FIXTURE_TEST_CASE(it_evm_to_eos, it_tester)
 try {
     evm_eoa evm1;
+    evm_eoa evm2;
     auto addr_alice = silkworm::make_reserved_address("alice"_n.to_uint64_t());
     // Give evm1 some EOS
     transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(1000000, eos_token_symbol), evm1.address_0x().c_str());
@@ -684,6 +685,11 @@ try {
 
     BOOST_REQUIRE_EXCEPTION(bridgeTransferERC20(evm1, addr_alice, 1, "aaa", fee), 
                 eosio_assert_message_exception, eosio_assert_message_is("bridge amount can not have dust"));
+    BOOST_REQUIRE(999999000 == balanceOf(evm1.address_0x().c_str()));
+    BOOST_REQUIRE(89999910 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 
+    produce_block();
+
+    bridgeTransferERC20(evm1, *(evmc::from_hex<evmc::address>(evm2.address_0x())), 100, "aaa", fee); // revert
     BOOST_REQUIRE(999999000 == balanceOf(evm1.address_0x().c_str()));
     BOOST_REQUIRE(89999910 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 
     produce_block();
