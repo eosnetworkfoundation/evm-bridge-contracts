@@ -1459,13 +1459,6 @@ contract ERC20Upgradeable is Initializable, ContextUpgradeable, IERC20Upgradeabl
     function _afterTokenTransfer(address from, address to, uint256 amount, string memory memo) internal virtual {}
 
     /**
-     * @dev Hook that is called first in transfer() and transferFrom()
-     *
-     * The function should revert if bridge transfers from those functions are not allowed,
-     */
-    function _checkBlockDirectTransferToReservedAddr(address to) internal virtual {}
-
-    /**
      * @dev This empty reserved space is put in place to allow future versions to add new
      * variables without shifting down storage in the inheritance chain.
      * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
