@@ -694,6 +694,20 @@ try {
     BOOST_REQUIRE(89999910 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 
     produce_block();
 
+    auto addr_erc20 = silkworm::make_reserved_address(erc20_account.to_uint64_t());
+
+    bridgeTransferERC20(evm1, addr_erc20, 100, "aaa", fee); // revert
+    BOOST_REQUIRE(999999000 == balanceOf(evm1.address_0x().c_str()));
+    BOOST_REQUIRE(89999910 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 
+    produce_block();
+
+    auto bal_before = get_balance(erc20_account, token_account, symbol::from_string("4,USDT")).get_amount();
+    transferERC20(evm1, addr_erc20, 100); // revert
+    BOOST_REQUIRE(999999000 == balanceOf(evm1.address_0x().c_str()));
+    BOOST_REQUIRE(bal_before == get_balance(erc20_account, token_account, symbol::from_string("4,USDT")).get_amount()); // 
+    BOOST_REQUIRE(0 == balanceOf(address_str_0x(addr_erc20).c_str()));
+    produce_block();
+
     bridgeTransferERC20(evm1, addr_alice, 100, "aaa", fee);
     BOOST_REQUIRE(999998900 == balanceOf(evm1.address_0x().c_str()));
     BOOST_REQUIRE(89999911 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 

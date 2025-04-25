@@ -1545,6 +1545,9 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
     function _beforeTokenTransfer(address from, address to, uint256 amount, string memory) internal virtual override {
         // ignore mint and burn
         if (from == address(0) || to == address(0)) return;
+
+        // Block Non-Mint transfer to linkedEOSAddress to avoid linkedEOSAddress holding any token.
+        require(to != linkedEOSAddress, "cannot transfer to linked address");
  
         if (from == linkedEOSAddress) {
             // Any transfers from linkedEOSAddress will always trigger Mint.
@@ -1562,7 +1565,7 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
         if (msg.sig == this.bridgeTransfer.selector) {
             // We can check this earlier to save some cpu/gas in reverting calls.
             // But check it here will make code more clear.
-            require(_isReservedAddress(to), "cannot bridgeTransfer to non reseved address");
+            require(_isReservedAddress(to), "cannot bridgeTransfer to non reseved");
             require(msg.value == egressFee, "incorrect egress bridge fee");
             // Call bridgeMessage of EVM Runtime
             // sha("bridgeTransferV0(address,uint256,string)") = 0x653332e5
