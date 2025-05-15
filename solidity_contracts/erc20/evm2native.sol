@@ -922,7 +922,7 @@ interface IERC20 {
     function allowance(address owner, address spender) external view returns (uint);
     function approve(address spender, uint value) external returns (bool);
     function transfer(address to, uint value) external returns (bool);
-    function transferFrom(address from, address to, uint value) external returns (bool);
+    function transferFrom(address from, address to, uint value) external;
 }
 
 contract Evm2Native is Initializable, UUPSUpgradeable {
@@ -1002,9 +1002,7 @@ contract Evm2Native is Initializable, UUPSUpgradeable {
         require(_isReservedAddress(to), "to address must be reserved address");
         require(amount > 0, "amount too small");
 
-        if (!token.transferFrom(msg.sender, address(this), amount)) { 
-            revert(); 
-        }
+        token.transferFrom(msg.sender, address(this), amount);
 
         // Call bridgeMessage of EVM Runtime
         // sha("bridgeTransferV0(address,uint256,string)") = 0x653332e5
