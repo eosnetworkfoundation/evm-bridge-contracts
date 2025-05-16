@@ -262,6 +262,26 @@ struct it_tester : erc20_tester {
         }
     }
 
+    void callBridgeTransfer(name caller, const evmc::address& to, intx::uint256 amount, const std::string& memo, intx::uint256 egressfee) {
+        auto target = evmc::from_hex<evmc::address>(evm_address);
+        auto target_bytes = evmc::bytes{std::begin(target->bytes), std::end(target->bytes)};
+
+        silkworm::Bytes data;
+        data = evmc::from_hex("0x73761828").value();
+        data += evmc::from_hex(address_str32(to)).value();       // param1 (to: address)
+        data += evmc::from_hex(uint256_str32(amount)).value();   // param2 (amount: uint256)
+        data += evmc::from_hex(int_str32(96)).value();           // offset memo (data: bytes)
+        data += evmc::from_hex(int_str32(memo.size())).value();  // memo length
+        if (!memo.empty()) {
+            data += evmc::from_hex(data_str32(str_to_hex(memo))).value();  // memo
+        }
+
+        evmc::bytes32 v;
+        intx::be::store(v.bytes, intx::uint256(intx::uint128(egressfee)));
+
+        call(caller, target_bytes, silkworm::Bytes(v), data, 500000, caller);
+    }
+
 };
 
 BOOST_AUTO_TEST_SUITE(erc20_tests)
@@ -723,6 +743,26 @@ try {
     BOOST_REQUIRE(89999911 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 
     produce_block();
 
+    // regular transfer should perform regular transfer instead of bridge transfer
+    transferERC20(evm1, addr_alice, 1000);
+    produce_block();
+
+    bal = balanceOf(evm1.address_0x().c_str());
+    BOOST_REQUIRE(bal == 999998900 - 1000);
+
+    bal = balanceOf(address_str_0x(addr_alice).c_str());
+    BOOST_REQUIRE(bal == 1000);
+
+    open("alice"_n);
+    produce_block();
+    transfer_token(eos_token_account, "alice"_n, evm_account, make_asset(1000000, eos_token_symbol), "alice");
+    produce_block();
+    callBridgeTransfer("alice"_n, addr_alice, 100, "aaa", fee);
+    produce_block();
+    bal = balanceOf(address_str_0x(addr_alice).c_str());
+    BOOST_REQUIRE(bal == 900);
+    BOOST_REQUIRE(89999912 == get_balance("alice"_n, token_account, symbol::from_string("4,USDT")).get_amount()); // 
+    
 
 }
 FC_LOG_AND_RETHROW()
