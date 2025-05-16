@@ -180,6 +180,8 @@ class erc20_tester : public eosio::testing::base_tester {
     silkworm::Transaction
     prepare_deploy_contract_tx(const unsigned char* contract, size_t size, uint64_t gas_limit) const;
     transaction_trace_ptr pushtx(const silkworm::Transaction& trx, name miner = {});
+    transaction_trace_ptr call(name from, const evmc::bytes& to, const evmc::bytes& value, evmc::bytes& data, uint64_t gas_limit, name actor);
+
 
     eosio::chain::abi_serializer abi_ser;
     eosio::chain::abi_serializer token_abi_ser;
