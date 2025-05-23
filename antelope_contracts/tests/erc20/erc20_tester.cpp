@@ -503,4 +503,21 @@ std::optional<evm_contract_account_t> erc20_tester::getEVMAccountInfo(uint64_t p
     else return std::optional<evm_contract_account_t>{};
 }
 
+transaction_trace_ptr erc20_tester::call(name from, const evmc::bytes& to, const evmc::bytes& value, evmc::bytes& data, uint64_t gas_limit, name actor)
+{
+   bytes to_bytes;
+   to_bytes.resize(to.size());
+   memcpy(to_bytes.data(), to.data(), to.size());
+   
+   bytes data_bytes;
+   data_bytes.resize(data.size());
+   memcpy(data_bytes.data(), data.data(), data.size());
+
+   bytes value_bytes;
+   value_bytes.resize(value.size());
+   memcpy(value_bytes.data(), value.data(), value.size());
+
+   return push_action(evm_account, "call"_n, actor,  mvo()("from", from)("to", to_bytes)("value", value_bytes)("data", data_bytes)("gas_limit", gas_limit));
+}
+
 }  // namespace erc20_test
