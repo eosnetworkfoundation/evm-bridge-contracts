@@ -1192,7 +1192,6 @@ contract ERC20Upgradeable is Initializable, ContextUpgradeable, IERC20Upgradeabl
      * - the caller must have a balance of at least `amount`.
      */
     function transfer(address to, uint256 amount) public virtual override returns (bool) {
-        _checkBlockDirectTransferToReservedAddr(to);
         address owner = _msgSender();
         _transfer(owner, to, amount, "");
         return true;
@@ -1252,7 +1251,6 @@ contract ERC20Upgradeable is Initializable, ContextUpgradeable, IERC20Upgradeabl
      * `amount`.
      */
     function transferFrom(address from, address to, uint256 amount) public virtual override returns (bool) {
-        _checkBlockDirectTransferToReservedAddr(to);
         address spender = _msgSender();
         _spendAllowance(from, spender, amount);
         _transfer(from, to, amount, "");
@@ -1461,13 +1459,6 @@ contract ERC20Upgradeable is Initializable, ContextUpgradeable, IERC20Upgradeabl
     function _afterTokenTransfer(address from, address to, uint256 amount, string memory memo) internal virtual {}
 
     /**
-     * @dev Hook that is called first in transfer() and transferFrom()
-     *
-     * The function should revert if bridge transfers from those functions are not allowed,
-     */
-    function _checkBlockDirectTransferToReservedAddr(address to) internal virtual {}
-
-    /**
      * @dev This empty reserved space is put in place to allow future versions to add new
      * variables without shifting down storage in the inheritance chain.
      * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
@@ -1554,8 +1545,14 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
     function _beforeTokenTransfer(address from, address to, uint256 amount, string memory) internal virtual override {
         // ignore mint and burn
         if (from == address(0) || to == address(0)) return;
+
+        // Block Non-Mint transfer to linkedEOSAddress to avoid linkedEOSAddress holding any token.
+        require(to != linkedEOSAddress, "cannot transfer to linked address");
  
         if (from == linkedEOSAddress) {
+            // Any transfers from linkedEOSAddress will always trigger Mint.
+            // Even if the linkedEOSAddress has some balance, we will not touch that balance.
+            // We may consider add some methods to touch this balance when it's really needed.
             require(msg.sender == linkedEOSAddress, "Bridge: only linked EOS address can mint");
             _mint(from, amount);
         }
@@ -1564,7 +1561,11 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
     function _afterTokenTransfer(address from, address to, uint256 amount, string memory memo) internal virtual override {
         // ignore mint and burn
         if (from == address(0) || to == address(0)) return;
-        if (_isReservedAddress(to)) {
+        // Only bridgeTransfer can trigger bridge transfer
+        if (msg.sig == this.bridgeTransfer.selector) {
+            // We can check this earlier to save some cpu/gas in reverting calls.
+            // But check it here will make code more clear.
+            require(_isReservedAddress(to), "cannot bridgeTransfer to non reseved");
             require(msg.value == egressFee, "incorrect egress bridge fee");
             // Call bridgeMessage of EVM Runtime
             // sha("bridgeTransferV0(address,uint256,string)") = 0x653332e5
@@ -1573,12 +1574,6 @@ contract BridgeERC20 is Initializable, ERC20Upgradeable, UUPSUpgradeable {
             if(!success) { revert(); }
 
             _burn(to, amount);
-        }
-    }
-
-    function _checkBlockDirectTransferToReservedAddr(address to) internal virtual override {
-        if (_isReservedAddress(to)) {
-            revert(); 
         }
     }
 
